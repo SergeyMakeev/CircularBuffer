@@ -14,16 +14,22 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# Include GoogleTest
+# Include GoogleTest and Google Benchmark
 include(FetchContent)
 FetchContent_Declare(
     googletest
     URL https://github.com/google/googletest/archive/refs/tags/release-1.12.1.zip
 )
 
+FetchContent_Declare(
+    googlebenchmark
+    URL https://github.com/google/benchmark/archive/refs/tags/v1.8.3.zip
+)
+
 # For Windows: Prevent overriding the parent project's compiler/linker settings
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
+set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest googlebenchmark)
 enable_testing()
 include(GoogleTest)
 
@@ -54,8 +60,9 @@ add_executable(performance_test
     tests/performance_test.cpp
 )
 
-# Link circular_buffer library to performance test
+# Link Google Benchmark and circular_buffer library to performance test
 target_link_libraries(performance_test 
+    benchmark::benchmark
     dod::circular_buffer
 )
 
