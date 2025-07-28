@@ -1,0 +1,102 @@
+name: Sanitizers
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  sanitizers:
+    name: ${{ matrix.config.name }}
+    runs-on: ubuntu-22.04
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {
+              name: "AddressSanitizer",
+              cc: "clang-14",
+              cxx: "clang++-14",
+              sanitizer: "ASAN",
+              cmake_flags: "-DENABLE_ASAN=ON"
+            }
+          - {
+              name: "MemorySanitizer",
+              cc: "clang-14",
+              cxx: "clang++-14",
+              sanitizer: "MSAN",
+              cmake_flags: "-DENABLE_MSAN=ON"
+            }
+          - {
+              name: "ThreadSanitizer",
+              cc: "clang-14",
+              cxx: "clang++-14",
+              sanitizer: "TSAN",
+              cmake_flags: "-DENABLE_TSAN=ON"
+            }
+          - {
+              name: "UndefinedBehaviorSanitizer",
+              cc: "gcc-11",
+              cxx: "g++-11",
+              sanitizer: "UBSAN",
+              cmake_flags: "-DCMAKE_CXX_FLAGS='-fsanitize=undefined -fno-omit-frame-pointer' -DCMAKE_C_FLAGS='-fsanitize=undefined -fno-omit-frame-pointer'"
+            }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build ${{ matrix.config.cc }} ${{ matrix.config.cxx }}
+
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v1.14
+        with:
+          cmake-version: '3.25'
+
+      - name: Set Environment Variables
+        run: |
+          echo "CC=${{ matrix.config.cc }}" >> $GITHUB_ENV
+          echo "CXX=${{ matrix.config.cxx }}" >> $GITHUB_ENV
+
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -G Ninja \
+            ${{ matrix.config.cmake_flags }}
+
+      - name: Build
+        run: cmake --build build --config Debug --parallel
+
+      - name: Test with Sanitizer
+        working-directory: build
+        run: ctest --output-on-failure --parallel -C Debug
+        env:
+          # Configure sanitizers
+          ASAN_OPTIONS: "detect_leaks=1:abort_on_error=1:print_stacktrace=1"
+          MSAN_OPTIONS: "abort_on_error=1:print_stats=1"
+          TSAN_OPTIONS: "abort_on_error=1:print_stacktrace=1"
+          UBSAN_OPTIONS: "abort_on_error=1:print_stacktrace=1"
+
+      - name: Run Tests Directly with Sanitizer
+        working-directory: build
+        run: ./circular_buffer_tests --gtest_output=xml:test_results_${{ matrix.config.sanitizer }}.xml
+        env:
+          # Configure sanitizers
+          ASAN_OPTIONS: "detect_leaks=1:abort_on_error=1:print_stacktrace=1"
+          MSAN_OPTIONS: "abort_on_error=1:print_stats=1"
+          TSAN_OPTIONS: "abort_on_error=1:print_stacktrace=1"
+          UBSAN_OPTIONS: "abort_on_error=1:print_stacktrace=1"
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sanitizer-results-${{ matrix.config.name }}
+          path: build/test_results_${{ matrix.config.sanitizer }}.xml 

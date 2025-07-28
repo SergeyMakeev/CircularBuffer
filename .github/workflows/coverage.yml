@@ -1,0 +1,87 @@
+name: Code Coverage
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build gcc-11 g++-11 lcov
+
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v1.14
+        with:
+          cmake-version: '3.25'
+
+      - name: Set Environment Variables
+        run: |
+          echo "CC=gcc-11" >> $GITHUB_ENV
+          echo "CXX=g++-11" >> $GITHUB_ENV
+
+      - name: Configure CMake with Coverage
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DENABLE_COVERAGE=ON \
+            -G Ninja
+
+      - name: Build
+        run: cmake --build build --config Debug --parallel
+
+      - name: Run Tests
+        working-directory: build
+        run: ctest --output-on-failure --parallel -C Debug
+
+      - name: Generate Coverage Report
+        working-directory: build
+        run: |
+          # Create coverage directory
+          mkdir -p coverage
+          
+          # Capture coverage data
+          lcov --capture --directory . --output-file coverage/coverage.info
+          
+          # Filter out system headers and test files
+          lcov --remove coverage/coverage.info \
+            '/usr/*' \
+            '*/extern/*' \
+            '*/tests/*' \
+            '*/test_*' \
+            '*_test.cpp' \
+            '*/googletest/*' \
+            --output-file coverage/coverage_filtered.info
+          
+          # Generate HTML report
+          genhtml coverage/coverage_filtered.info --output-directory coverage/html
+          
+          # Print summary
+          lcov --summary coverage/coverage_filtered.info
+
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: build/coverage/coverage_filtered.info
+          flags: unittests
+          name: circular-buffer-coverage
+          fail_ci_if_error: false
+
+      - name: Upload Coverage Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            build/coverage/coverage_filtered.info
+            build/coverage/html/ 

@@ -1,0 +1,278 @@
+# Circular Buffer Performance Optimization Rules
+
+## Core Principle: Minimize Index Calculations
+Always prefer cached index calculations over repeated modulo/division operations when accessing circular buffer elements.
+
+## ❌ AVOID: Repeated Index Calculations
+
+### Anti-Pattern 1: Repeated modulo operations in loops
+```cpp
+// BAD: Repeated expensive modulo calculations
+for (size_t i = 0; i < count; ++i) {
+    size_t physical_idx = (start_idx + i) % Capacity;
+    process(storage[physical_idx]);
+}
+```
+
+### Anti-Pattern 2: Recalculating physical indices
+```cpp
+// BAD: Redundant physical index calculations
+for (size_t logical_idx = 0; logical_idx < m_size; ++logical_idx) {
+    size_t physical_idx = add_index(m_tail, logical_idx);  // Called repeatedly
+    process(storage[physical_idx]);
+}
+```
+
+### Anti-Pattern 3: Linear search instead of index arithmetic
+```cpp
+// BAD: O(n) search when O(1) arithmetic suffices
+auto find_element(size_t target_logical_idx) {
+    size_t logical_idx = 0;
+    size_t physical_idx = m_tail;
+    while (logical_idx != target_logical_idx) {
+        physical_idx = next_index(physical_idx);
+        ++logical_idx;
+    }
+    return storage[physical_idx];
+}
+```
+
+## ✅ PREFERRED: Optimized Index Management
+
+### Pattern 1: Power-of-2 optimization with bit masking
+```cpp
+// GOOD: Template specialization for power-of-2 capacities
+constexpr IndexType next_index(IndexType index) const noexcept
+{
+    if constexpr ((Capacity & (Capacity - 1)) == 0) {
+        // Power of 2: use bit masking (faster)
+        return (index + 1) & (Capacity - 1);
+    } else {
+        // Generic: use conditional to avoid modulo
+        return (index + 1 < Capacity) ? index + 1 : 0;
+    }
+}
+```
+
+### Pattern 2: Batch index calculations
+```cpp
+// GOOD: Calculate once, increment manually
+template<typename Func>
+void iterate_range(size_t start_logical, size_t count, Func&& func) {
+    size_t physical_idx = add_index(m_tail, start_logical);
+    
+    for (size_t i = 0; i < count; ++i) {
+        func(storage[physical_idx]);
+        physical_idx = next_index(physical_idx);  // Incremental, not recalculated
+    }
+}
+```
+
+### Pattern 3: Direct arithmetic for contiguous ranges
+```cpp
+// GOOD: Handle wraparound efficiently with minimal branching
+void copy_elements(T* dest, size_t start_logical, size_t count) {
+    size_t start_physical = add_index(m_tail, start_logical);
+    
+    if (start_physical + count <= Capacity) {
+        // No wraparound: single memcpy
+        std::memcpy(dest, &storage[start_physical], count * sizeof(T));
+    } else {
+        // Wraparound: two memcpy operations
+        size_t first_part = Capacity - start_physical;
+        std::memcpy(dest, &storage[start_physical], first_part * sizeof(T));
+        std::memcpy(dest + first_part, &storage[0], (count - first_part) * sizeof(T));
+    }
+}
+```
+
+## Memory Access Optimization
+
+### Pattern 1: Trivial type bulk operations
+```cpp
+// GOOD: Use memcpy for trivially copyable types
+if constexpr (std::is_trivially_copyable_v<T>) {
+    std::memcpy(dest_storage, src_storage, element_count * sizeof(T));
+} else {
+    // Non-trivial types: use move/copy constructors
+    for (size_t i = 0; i < element_count; ++i) {
+        dod::construct<T>(&dest_storage[i], std::move(src_storage[i]));
+    }
+}
+```
+
+### Pattern 2: Template specialization for alignment
+```cpp
+// GOOD: Specialized implementations for different alignments
+template<size_t Alignment>
+struct storage_operations {
+    static T* allocate(size_t count) {
+        return static_cast<T*>(CIRCULAR_BUFFER_ALLOC(count * sizeof(T), Alignment));
+    }
+};
+
+// Specialization for cache-line alignment
+template<>
+struct storage_operations<64> {
+    static T* allocate(size_t count) {
+        // Ensure allocation is cache-line aligned for SIMD operations
+        return static_cast<T*>(CIRCULAR_BUFFER_ALLOC(count * sizeof(T), 64));
+    }
+};
+```
+
+## Branch Prediction Optimization
+
+### Pattern 1: Likely/unlikely annotations
+```cpp
+// GOOD: Help branch predictor with common patterns
+insert_result push_back_impl(U&& value) {
+    if constexpr (Policy == overflow_policy::discard) {
+        if ([[unlikely]] full()) {  // Full condition is typically rare
+            return insert_result::discarded;
+        }
+    }
+    
+    if ([[likely]] !full()) {  // Normal insertion is the common case
+        // Fast path: normal insertion
+    } else {
+        // Slow path: overflow handling
+    }
+}
+```
+
+### Pattern 2: Early exit for edge cases
+```cpp
+// GOOD: Handle edge cases first to avoid nested conditions
+template<typename Iterator>
+bulk_insert_result<size_type> push_back_range(Iterator first, Iterator last) {
+    if (first == last) {
+        return {};  // Early exit for empty range
+    }
+    
+    if constexpr (Policy == overflow_policy::discard) {
+        if (full()) {
+            return {0, 0, std::distance(first, last)};  // Early exit for full buffer
+        }
+    }
+    
+    // Main insertion logic without deep nesting
+    bulk_insert_result<size_type> result;
+    for (auto it = first; it != last; ++it) {
+        // ... insertion logic
+    }
+    return result;
+}
+```
+
+## Template Metaprogramming for Performance
+
+### Pattern 1: Compile-time capacity optimization
+```cpp
+// GOOD: Different strategies based on capacity size
+template<size_t Cap>
+struct index_strategy {
+    static constexpr bool use_bit_masking = (Cap & (Cap - 1)) == 0;
+    static constexpr bool use_lookup_table = Cap <= 256;
+    static constexpr bool use_direct_arithmetic = Cap <= 16;
+};
+```
+
+### Pattern 2: SFINAE for type-specific optimizations
+```cpp
+// GOOD: Enable optimizations only for suitable types
+template<typename U = T>
+std::enable_if_t<std::is_trivially_copyable_v<U>, void>
+bulk_copy(const T* src, T* dest, size_t count) {
+    std::memcpy(dest, src, count * sizeof(T));
+}
+
+template<typename U = T>
+std::enable_if_t<!std::is_trivially_copyable_v<U>, void>
+bulk_copy(const T* src, T* dest, size_t count) {
+    for (size_t i = 0; i < count; ++i) {
+        dod::construct<T>(&dest[i], src[i]);
+    }
+}
+```
+
+## Iterator Performance Rules
+
+### Rule 1: Cache container pointers
+```cpp
+// GOOD: Cache frequently accessed container data
+template<bool IsConst>
+class iterator_impl {
+    container_pointer m_container;
+    IndexType m_index;
+    
+    // Cache container data for hot paths
+    const T* cached_storage() const { return m_container->get_storage(); }
+    IndexType cached_tail() const { return m_container->m_tail; }
+};
+```
+
+### Rule 2: Minimize virtual function calls
+```cpp
+// GOOD: Inline all critical iterator operations
+CIRCULAR_BUFFER_INLINE reference operator*() const noexcept {
+    return m_container->get_storage()[m_container->physical_index(m_index)];
+}
+
+CIRCULAR_BUFFER_INLINE iterator_impl& operator++() noexcept {
+    ++m_index;
+    return *this;
+}
+```
+
+## Performance Measurement Guidelines
+
+### Rule 1: Use compiler intrinsics for measurement
+```cpp
+// GOOD: Prevent compiler optimizations in benchmarks
+void benchmark_push_operations() {
+    volatile int sink = 0;  // Prevent dead code elimination
+    
+    for (size_t i = 0; i < iterations; ++i) {
+        buffer.push_back(static_cast<int>(i));
+        sink += buffer.back();  // Force computation
+    }
+}
+```
+
+### Rule 2: Test realistic usage patterns
+```cpp
+// GOOD: Benchmark common real-world scenarios
+void benchmark_producer_consumer() {
+    // Simulate real producer-consumer pattern
+    for (size_t i = 0; i < operations; ++i) {
+        // Producer: add elements
+        buffer.push_back(generate_data());
+        
+        // Consumer: process and remove elements occasionally
+        if (i % consumer_frequency == 0 && !buffer.empty()) {
+            process(buffer.front());
+            buffer.pop_front();
+        }
+    }
+}
+```
+
+## Code Review Checklist
+
+Before approving any circular buffer performance changes, verify:
+
+- [ ] No repeated index calculations in loops
+- [ ] Power-of-2 optimization is used where applicable
+- [ ] Bulk operations use memcpy for trivial types
+- [ ] Branch predictions are optimized for common cases
+- [ ] Template specializations eliminate runtime overhead
+- [ ] Iterator operations are inlined
+- [ ] Memory access patterns are cache-friendly
+- [ ] Edge cases are handled with early exits
+
+Remember: The goal is to achieve 2-5x performance improvement over std::deque for push/pop operations while maintaining code clarity and correctness.
+description:
+globs:
+alwaysApply: false
+---
