@@ -881,7 +881,7 @@ TEST_F(CircularBufferTest, DefaultOverwritePolicyBehavior)
     auto result = buffer.push_back(4);
     EXPECT_EQ(result, insert_result::overwritten);
     EXPECT_EQ(buffer.size(), 3);
-    
+
     // Also test emplace_back to ensure coverage
     auto result2 = buffer.emplace_back(5);
     EXPECT_EQ(result2, insert_result::overwritten);
@@ -895,7 +895,8 @@ TEST_F(CircularBufferTest, HeapStorageOverwrite)
     EXPECT_FALSE(buffer.has_inline_storage());
 
     // Fill the buffer
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < 100; ++i)
+    {
         buffer.push_back(i);
     }
     EXPECT_TRUE(buffer.full());
@@ -911,15 +912,17 @@ TEST_F(CircularBufferTest, MoveConstructorHeapStorage)
 {
     // Test move constructor with heap storage
     circular_buffer<int, 100> original; // Large enough to force heap storage
-    for (int i = 0; i < 50; ++i) {
+    for (int i = 0; i < 50; ++i)
+    {
         original.push_back(i);
     }
 
     circular_buffer<int, 100> moved(std::move(original));
     EXPECT_EQ(moved.size(), 50);
     EXPECT_EQ(original.size(), 0); // Original should be empty after move
-    
-    for (int i = 0; i < 50; ++i) {
+
+    for (int i = 0; i < 50; ++i)
+    {
         EXPECT_EQ(moved[i], i);
     }
 }
@@ -928,17 +931,19 @@ TEST_F(CircularBufferTest, MoveAssignmentHeapStorage)
 {
     // Test move assignment with heap storage
     circular_buffer<int, 100> original;
-    for (int i = 0; i < 50; ++i) {
+    for (int i = 0; i < 50; ++i)
+    {
         original.push_back(i);
     }
 
     circular_buffer<int, 100> moved;
     moved = std::move(original);
-    
+
     EXPECT_EQ(moved.size(), 50);
     EXPECT_EQ(original.size(), 0); // Original should be empty after move
-    
-    for (int i = 0; i < 50; ++i) {
+
+    for (int i = 0; i < 50; ++i)
+    {
         EXPECT_EQ(moved[i], i);
     }
 }
@@ -946,17 +951,17 @@ TEST_F(CircularBufferTest, MoveAssignmentHeapStorage)
 TEST_F(CircularBufferTest, IteratorEdgeCases)
 {
     circular_buffer<int, 5> buffer{1, 2, 3};
-    
+
     // Test iterator conversion from non-const to const
     auto it = buffer.begin();
     circular_buffer<int, 5>::const_iterator const_it = it;
     EXPECT_EQ(*const_it, 1);
-    
+
     // Test iterator arithmetic edge cases
     auto it2 = buffer.cend();
     EXPECT_EQ(*(it2 - 1), 3);
-    
-    // Test operator-> 
+
+    // Test operator->
     auto it3 = buffer.begin();
     EXPECT_EQ(it3.operator->(), &buffer[0]);
 }
@@ -964,13 +969,13 @@ TEST_F(CircularBufferTest, IteratorEdgeCases)
 TEST_F(CircularBufferTest, DiscardPolicyWithEmplaceFront)
 {
     circular_buffer<int, 3, overflow_policy::discard> buffer;
-    
+
     // Fill buffer
     buffer.push_back(1);
     buffer.push_back(2);
     buffer.push_back(3);
     EXPECT_TRUE(buffer.full());
-    
+
     // Test emplace_front with discard policy
     auto result = buffer.emplace_front(99);
     EXPECT_EQ(result, insert_result::discarded);
