@@ -278,7 +278,7 @@ class circular_buffer
         }
         else
         {
-            return (index + 1 < Capacity) ? index + 1 : 0;
+            return (static_cast<size_t>(index) + 1 < Capacity) ? index + 1 : 0;
         }
     }
 

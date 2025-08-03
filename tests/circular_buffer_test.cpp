@@ -976,7 +976,6 @@ TEST_F(CircularBufferTest, IteratorEdgeCases)
     EXPECT_EQ(*const_it, 1);
 
     // Test end iterator (forward iterator only)
-    auto it2 = buffer.cend();
     auto it_last = buffer.cbegin();
     // Advance to last element
     ++it_last;
