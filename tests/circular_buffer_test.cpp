@@ -801,3 +801,179 @@ TEST_F(CircularBufferTest, VectorType)
     EXPECT_EQ(buffer[1].size(), 5);
     EXPECT_EQ(buffer[1][0], 42);
 }
+
+// ============================================================================
+// Coverage Tests - Additional tests to achieve 100% coverage
+// ============================================================================
+
+TEST_F(CircularBufferTest, PushFrontOverwriteBehavior)
+{
+    circular_buffer<int, 3> buffer;
+
+    // Fill the buffer
+    buffer.push_back(1);
+    buffer.push_back(2);
+    buffer.push_back(3);
+    EXPECT_TRUE(buffer.full());
+
+    // Push front should overwrite - this tests the overwrite logic in push_front
+    auto result = buffer.push_front(99);
+    EXPECT_EQ(result, insert_result::overwritten);
+    EXPECT_EQ(buffer.size(), 3);
+    EXPECT_EQ(buffer.front(), 99);
+    EXPECT_EQ(buffer[1], 1);
+    EXPECT_EQ(buffer[2], 2);
+}
+
+TEST_F(CircularBufferTest, EmplaceFrontOperations)
+{
+    circular_buffer<TestObject, 5> buffer;
+    TestObject::reset_counters();
+
+    // Test emplace_front
+    auto result = buffer.emplace_front(42);
+    EXPECT_EQ(result, insert_result::inserted);
+    EXPECT_EQ(buffer.size(), 1);
+    EXPECT_EQ(buffer.front().value, 42);
+    EXPECT_EQ(TestObject::constructor_calls, 1); // Should construct in place
+
+    // Test emplace_front when buffer becomes full
+    buffer.emplace_front(1);
+    buffer.emplace_front(2);
+    buffer.emplace_front(3);
+    buffer.emplace_front(4);
+    EXPECT_TRUE(buffer.full());
+
+    // Test emplace_front overwrite behavior
+    auto overwrite_result = buffer.emplace_front(99);
+    EXPECT_EQ(overwrite_result, insert_result::overwritten);
+    EXPECT_EQ(buffer.size(), 5);
+    EXPECT_EQ(buffer.front().value, 99);
+}
+
+TEST_F(CircularBufferTest, ConstAtMethod)
+{
+    circular_buffer<int, 5> buffer{10, 20, 30};
+    const auto& const_buffer = buffer;
+
+    // Test const at() method
+    EXPECT_EQ(const_buffer.at(0), 10);
+    EXPECT_EQ(const_buffer.at(1), 20);
+    EXPECT_EQ(const_buffer.at(2), 30);
+
+    // Test const at() with out of range
+    EXPECT_THROW(const_buffer.at(3), std::out_of_range);
+    EXPECT_THROW(const_buffer.at(10), std::out_of_range);
+}
+
+TEST_F(CircularBufferTest, DefaultOverwritePolicyBehavior)
+{
+    // Test default overwrite policy behavior
+    circular_buffer<int, 3> buffer; // Uses default overwrite policy
+
+    // Fill the buffer
+    buffer.push_back(1);
+    buffer.push_back(2);
+    buffer.push_back(3);
+    EXPECT_TRUE(buffer.full());
+
+    // Test overwrite behavior with default policy
+    auto result = buffer.push_back(4);
+    EXPECT_EQ(result, insert_result::overwritten);
+    EXPECT_EQ(buffer.size(), 3);
+    
+    // Also test emplace_back to ensure coverage
+    auto result2 = buffer.emplace_back(5);
+    EXPECT_EQ(result2, insert_result::overwritten);
+    EXPECT_EQ(buffer.size(), 3);
+}
+
+TEST_F(CircularBufferTest, HeapStorageOverwrite)
+{
+    // Test overwrite with heap storage to ensure coverage of all paths
+    circular_buffer<int, 100> buffer; // Large enough to force heap storage
+    EXPECT_FALSE(buffer.has_inline_storage());
+
+    // Fill the buffer
+    for (int i = 0; i < 100; ++i) {
+        buffer.push_back(i);
+    }
+    EXPECT_TRUE(buffer.full());
+
+    // Test overwrite with heap storage
+    auto result = buffer.push_back(999);
+    EXPECT_EQ(result, insert_result::overwritten);
+    EXPECT_EQ(buffer.size(), 100);
+    EXPECT_EQ(buffer.back(), 999);
+}
+
+TEST_F(CircularBufferTest, MoveConstructorHeapStorage)
+{
+    // Test move constructor with heap storage
+    circular_buffer<int, 100> original; // Large enough to force heap storage
+    for (int i = 0; i < 50; ++i) {
+        original.push_back(i);
+    }
+
+    circular_buffer<int, 100> moved(std::move(original));
+    EXPECT_EQ(moved.size(), 50);
+    EXPECT_EQ(original.size(), 0); // Original should be empty after move
+    
+    for (int i = 0; i < 50; ++i) {
+        EXPECT_EQ(moved[i], i);
+    }
+}
+
+TEST_F(CircularBufferTest, MoveAssignmentHeapStorage)
+{
+    // Test move assignment with heap storage
+    circular_buffer<int, 100> original;
+    for (int i = 0; i < 50; ++i) {
+        original.push_back(i);
+    }
+
+    circular_buffer<int, 100> moved;
+    moved = std::move(original);
+    
+    EXPECT_EQ(moved.size(), 50);
+    EXPECT_EQ(original.size(), 0); // Original should be empty after move
+    
+    for (int i = 0; i < 50; ++i) {
+        EXPECT_EQ(moved[i], i);
+    }
+}
+
+TEST_F(CircularBufferTest, IteratorEdgeCases)
+{
+    circular_buffer<int, 5> buffer{1, 2, 3};
+    
+    // Test iterator conversion from non-const to const
+    auto it = buffer.begin();
+    circular_buffer<int, 5>::const_iterator const_it = it;
+    EXPECT_EQ(*const_it, 1);
+    
+    // Test iterator arithmetic edge cases
+    auto it2 = buffer.cend();
+    EXPECT_EQ(*(it2 - 1), 3);
+    
+    // Test operator-> 
+    auto it3 = buffer.begin();
+    EXPECT_EQ(it3.operator->(), &buffer[0]);
+}
+
+TEST_F(CircularBufferTest, DiscardPolicyWithEmplaceFront)
+{
+    circular_buffer<int, 3, overflow_policy::discard> buffer;
+    
+    // Fill buffer
+    buffer.push_back(1);
+    buffer.push_back(2);
+    buffer.push_back(3);
+    EXPECT_TRUE(buffer.full());
+    
+    // Test emplace_front with discard policy
+    auto result = buffer.emplace_front(99);
+    EXPECT_EQ(result, insert_result::discarded);
+    EXPECT_EQ(buffer.size(), 3);
+    EXPECT_EQ(buffer.front(), 1); // Should be unchanged
+}

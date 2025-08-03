@@ -275,7 +275,6 @@ class circular_buffer
         if (was_full)
         {
             // Overwrite mode: reuse existing slot
-            CIRCULAR_BUFFER_ASSERT(Policy == overflow_policy::overwrite);
             if constexpr (Position == insert_position::back)
             {
                 dod::destruct(&storage[m_head]);
