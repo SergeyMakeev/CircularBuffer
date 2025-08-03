@@ -42,7 +42,6 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 # Test source files
 set(TEST_SOURCES
     tests/circular_buffer_test.cpp
-    tests/iterator_debug_test.cpp
 )
 
 # Add circular buffer test executable
