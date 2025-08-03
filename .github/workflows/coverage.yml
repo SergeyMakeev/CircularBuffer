@@ -1,4 +1,4 @@
-name: Code Coverage
+name: Coverage
 
 on:
   push:
@@ -11,12 +11,12 @@ jobs:
   coverage:
     name: Code Coverage
     runs-on: ubuntu-22.04
-
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Dependencies
+      - name: Install Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build gcc-11 g++-11 lcov
@@ -26,62 +26,42 @@ jobs:
         with:
           cmake-version: '3.25'
 
-      - name: Set Environment Variables
-        run: |
-          echo "CC=gcc-11" >> $GITHUB_ENV
-          echo "CXX=g++-11" >> $GITHUB_ENV
-
       - name: Configure CMake with Coverage
         run: |
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Debug \
-            -DENABLE_COVERAGE=ON \
+            -DCMAKE_CXX_FLAGS="--coverage -fprofile-arcs -ftest-coverage" \
+            -DCMAKE_C_FLAGS="--coverage -fprofile-arcs -ftest-coverage" \
+            -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
             -G Ninja
+        env:
+          CC: gcc-11
+          CXX: g++-11
 
       - name: Build
-        run: cmake --build build --config Debug --parallel
+        run: cmake --build build --parallel
 
       - name: Run Tests
         working-directory: build
-        run: ctest --output-on-failure --parallel -C Debug
+        run: ./circular_buffer_tests
 
       - name: Generate Coverage Report
-        working-directory: build
         run: |
-          # Create coverage directory
-          mkdir -p coverage
-          
-          # Capture coverage data
-          lcov --capture --directory . --output-file coverage/coverage.info
-          
-          # Filter out system headers and test files
-          lcov --remove coverage/coverage.info \
-            '/usr/*' \
-            '*/extern/*' \
-            '*/tests/*' \
-            '*/test_*' \
-            '*_test.cpp' \
-            '*/googletest/*' \
-            --output-file coverage/coverage_filtered.info
-          
-          # Generate HTML report
-          genhtml coverage/coverage_filtered.info --output-directory coverage/html
-          
-          # Print summary
-          lcov --summary coverage/coverage_filtered.info
+          lcov --directory build --capture --output-file coverage.info
+          lcov --extract coverage.info '*/circular_buffer/circular_buffer.h' --output-file coverage_filtered.info
+          lcov --list coverage_filtered.info
+          echo "=== Coverage file contents ==="
+          cat coverage_filtered.info
 
-      - name: Upload Coverage to Codecov
-        uses: codecov/codecov-action@v4
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
         with:
-          file: build/coverage/coverage_filtered.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage_filtered.info
           flags: unittests
-          name: circular-buffer-coverage
+          name: codecov-umbrella
           fail_ci_if_error: false
-
-      - name: Upload Coverage Reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: |
-            build/coverage/coverage_filtered.info
-            build/coverage/html/ 
+          disable_search: true
+          override_branch: ${{ github.ref_name }}
+          override_build: ${{ github.run_number }}
+          override_commit: ${{ github.sha }} 
