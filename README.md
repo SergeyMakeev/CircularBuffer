@@ -2,11 +2,11 @@
 
 A high-performance, header-only circular buffer implementation for C++17 that stores exactly N elements without the N-1 limitation found in many implementations.
 
-[![Windows](https://github.com/SergeyMakeev/CircularBuffer/actions/workflows/windows.yml/badge.svg)](https://github.com/SergeyMakeev/CircularBuffer/actions/workflows/windows.yml)
-[![Linux GCC](https://github.com/SergeyMakeev/CircularBuffer/actions/workflows/linux-gcc.yml/badge.svg)](https://github.com/SergeyMakeev/CircularBuffer/actions/workflows/linux-gcc.yml)
-[![Linux Clang](https://github.com/SergeyMakeev/CircularBuffer/actions/workflows/linux-clang.yml/badge.svg)](https://github.com/SergeyMakeev/CircularBuffer/actions/workflows/linux-clang.yml)
-[![macOS](https://github.com/SergeyMakeev/CircularBuffer/actions/workflows/macos.yml/badge.svg)](https://github.com/SergeyMakeev/CircularBuffer/actions/workflows/macos.yml)
-[![Code Coverage](https://codecov.io/github/SergeyMakeev/CircularBuffer/branch/main/graph/badge.svg)](https://codecov.io/github/SergeyMakeev/CircularBuffer)
+[![License](https://img.shields.io/github/license/SergeyMakeev/CircularBuffer)](LICENSE)
+[![ci](https://github.com/SergeyMakeev/CircularBuffer/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/CircularBuffer/actions/workflows/ci.yml)
+[![perf](https://github.com/SergeyMakeev/CircularBuffer/actions/workflows/performance.yml/badge.svg?branch=main)](https://github.com/SergeyMakeev/CircularBuffer/actions/workflows/performance.yml)
+[![codecov](https://codecov.io/gh/SergeyMakeev/CircularBuffer/graph/badge.svg?token=96U5VUJ6RA)](https://codecov.io/gh/SergeyMakeev/CircularBuffer)
+
 
 ## Quick Start
 
