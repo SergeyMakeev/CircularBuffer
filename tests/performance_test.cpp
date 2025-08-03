@@ -15,11 +15,8 @@ using namespace dod;
 // =============================================================================
 
 constexpr size_t SMALL_SIZE = 1000;
-constexpr size_t MEDIUM_SIZE = 10000;
+[[maybe_unused]] constexpr size_t MEDIUM_SIZE = 10000;
 constexpr size_t LARGE_SIZE = 100000;
-
-// Suppress unused variable warning for MEDIUM_SIZE
-CIRCULAR_BUFFER_MAYBE_UNUSED(MEDIUM_SIZE);
 
 // Helper to prevent compiler optimizations
 template <typename T> void DoNotOptimize(T&& value) { benchmark::DoNotOptimize(value); }

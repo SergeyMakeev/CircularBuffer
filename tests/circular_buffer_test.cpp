@@ -129,10 +129,14 @@ TEST_F(CircularBufferTest, SelfAssignment)
 {
     circular_buffer<int, 10> buffer{1, 2, 3, 4, 5};
 
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wself-assign-overloaded"
+#endif
     buffer = buffer; // Self-assignment
+#ifdef __clang__
 #pragma clang diagnostic pop
+#endif
 
     EXPECT_EQ(buffer.size(), 5);
     std::vector<int> expected = {1, 2, 3, 4, 5};
