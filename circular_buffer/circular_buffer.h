@@ -217,7 +217,7 @@ class circular_buffer
         else
         {
             // Generic
-            return (index + 1 < Capacity) ? index + 1 : 0;
+            return (static_cast<size_t>(index) + 1 < Capacity) ? index + 1 : 0;
         }
     }
 
@@ -231,7 +231,7 @@ class circular_buffer
         else
         {
             // Generic
-            return (index > 0) ? index - 1 : Capacity - 1;
+            return (index > 0) ? index - 1 : static_cast<IndexType>(Capacity - 1);
         }
     }
 
@@ -245,7 +245,7 @@ class circular_buffer
         else
         {
             // Generic: use modulo
-            return (index + offset) % Capacity;
+            return static_cast<IndexType>((static_cast<size_t>(index) + static_cast<size_t>(offset)) % Capacity);
         }
     }
 
