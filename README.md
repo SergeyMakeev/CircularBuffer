@@ -396,17 +396,11 @@ A: No, this is a fixed-capacity container. The capacity is determined at compile
 **Q: Is it thread-safe?**  
 A: The current implementation is not thread-safe. For multi-threaded use, you'll need external synchronization (mutexes, atomic operations, etc.).
 
-**Q: What happened to the unchecked insert functions?**  
-A: They were removed for API simplicity. The regular insert functions are already highly optimized and the performance difference was negligible.
-
 **Q: How do I handle buffer overflow?**  
 A: Use the overflow_policy template parameter: `overwrite` (default) overwrites old data, `discard` rejects new data when full.
 
 **Q: Can I store move-only types?**  
 A: Yes! The implementation fully supports move-only types through perfect forwarding and move semantics.
-
-**Q: Why were bulk operations removed?**  
-A: They were removed to simplify the API. For bulk insertion, simply loop with individual `push_back()` calls - the performance is equivalent.
 
 **Q: Can I use custom allocators?**  
 A: Yes! Define `CIRCULAR_BUFFER_ALLOC` and `CIRCULAR_BUFFER_FREE` macros before including the header.
