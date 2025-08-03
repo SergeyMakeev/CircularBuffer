@@ -6,7 +6,6 @@
 #include <numeric>
 #include <random>
 #include <string>
-#include <vector>
 
 using namespace dod;
 
@@ -14,9 +13,9 @@ using namespace dod;
 // Test Configuration Constants
 // =============================================================================
 
-constexpr size_t SMALL_SIZE = 1000;
-[[maybe_unused]] constexpr size_t MEDIUM_SIZE = 10000;
-constexpr size_t LARGE_SIZE = 100000;
+constexpr size_t SMALL_SIZE = 32;
+constexpr size_t MEDIUM_SIZE = 2048;
+constexpr size_t LARGE_SIZE = 1000000;
 
 // Helper to prevent compiler optimizations
 template <typename T> void DoNotOptimize(T&& value) { benchmark::DoNotOptimize(value); }
@@ -419,56 +418,95 @@ template <typename Container> static void BM_VectorOperations(benchmark::State& 
 // Benchmark Registration - Push/Pop Operations
 // =============================================================================
 
-BENCHMARK_TEMPLATE(BM_PushBack, circular_buffer<int, LARGE_SIZE>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("CircularBuffer_PushBack");
-BENCHMARK_TEMPLATE(BM_PushBack, std::deque<int>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdDeque_PushBack");
-BENCHMARK_TEMPLATE(BM_PushBack, std::vector<int>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdVector_PushBack");
+BENCHMARK_TEMPLATE(BM_PushBack, circular_buffer<int, LARGE_SIZE>)
+    ->Args({SMALL_SIZE})
+    ->Args({MEDIUM_SIZE})
+    ->Args({LARGE_SIZE})
+    ->Name("CircularBuffer_PushBack");
+BENCHMARK_TEMPLATE(BM_PushBack, std::deque<int>)->Args({SMALL_SIZE})->Args({MEDIUM_SIZE})->Args({LARGE_SIZE})->Name("StdDeque_PushBack");
 
-BENCHMARK_TEMPLATE(BM_PushFront, circular_buffer<int, LARGE_SIZE>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("CircularBuffer_PushFront");
-BENCHMARK_TEMPLATE(BM_PushFront, std::deque<int>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdDeque_PushFront");
+BENCHMARK_TEMPLATE(BM_PushFront, circular_buffer<int, LARGE_SIZE>)
+    ->Args({SMALL_SIZE})
+    ->Args({MEDIUM_SIZE})
+    ->Args({LARGE_SIZE})
+    ->Name("CircularBuffer_PushFront");
+BENCHMARK_TEMPLATE(BM_PushFront, std::deque<int>)->Args({SMALL_SIZE})->Args({MEDIUM_SIZE})->Args({LARGE_SIZE})->Name("StdDeque_PushFront");
 
-BENCHMARK_TEMPLATE(BM_PopBack, circular_buffer<int, LARGE_SIZE>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("CircularBuffer_PopBack");
-BENCHMARK_TEMPLATE(BM_PopBack, std::deque<int>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdDeque_PopBack");
-BENCHMARK_TEMPLATE(BM_PopBack, std::vector<int>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdVector_PopBack");
+BENCHMARK_TEMPLATE(BM_PopBack, circular_buffer<int, LARGE_SIZE>)
+    ->Args({SMALL_SIZE})
+    ->Args({MEDIUM_SIZE})
+    ->Args({LARGE_SIZE})
+    ->Name("CircularBuffer_PopBack");
+BENCHMARK_TEMPLATE(BM_PopBack, std::deque<int>)->Args({SMALL_SIZE})->Args({MEDIUM_SIZE})->Args({LARGE_SIZE})->Name("StdDeque_PopBack");
 
 // =============================================================================
 // Benchmark Registration - Random Access
 // =============================================================================
 
-BENCHMARK_TEMPLATE(BM_RandomAccess, circular_buffer<int, LARGE_SIZE>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("CircularBuffer_RandomAccess");
-BENCHMARK_TEMPLATE(BM_RandomAccess, std::deque<int>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdDeque_RandomAccess");
-BENCHMARK_TEMPLATE(BM_RandomAccess, std::vector<int>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdVector_RandomAccess");
+BENCHMARK_TEMPLATE(BM_RandomAccess, circular_buffer<int, LARGE_SIZE>)
+    ->Args({SMALL_SIZE})
+    ->Args({MEDIUM_SIZE})
+    ->Args({LARGE_SIZE})
+    ->Name("CircularBuffer_RandomAccess");
+BENCHMARK_TEMPLATE(BM_RandomAccess, std::deque<int>)
+    ->Args({SMALL_SIZE})
+    ->Args({MEDIUM_SIZE})
+    ->Args({LARGE_SIZE})
+    ->Name("StdDeque_RandomAccess");
 
 // =============================================================================
 // Benchmark Registration - Iterator Traversal
 // =============================================================================
 
 BENCHMARK_TEMPLATE(BM_IteratorTraversal, circular_buffer<int, LARGE_SIZE>)
-    ->Range(SMALL_SIZE, LARGE_SIZE)
+    ->Args({SMALL_SIZE})
+    ->Args({MEDIUM_SIZE})
+    ->Args({LARGE_SIZE})
     ->Name("CircularBuffer_IteratorTraversal");
-BENCHMARK_TEMPLATE(BM_IteratorTraversal, std::deque<int>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdDeque_IteratorTraversal");
-BENCHMARK_TEMPLATE(BM_IteratorTraversal, std::vector<int>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdVector_IteratorTraversal");
+BENCHMARK_TEMPLATE(BM_IteratorTraversal, std::deque<int>)
+    ->Args({SMALL_SIZE})
+    ->Args({MEDIUM_SIZE})
+    ->Args({LARGE_SIZE})
+    ->Name("StdDeque_IteratorTraversal");
 
-BENCHMARK_TEMPLATE(BM_RangeBasedLoop, circular_buffer<int, LARGE_SIZE>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("CircularBuffer_RangeLoop");
-BENCHMARK_TEMPLATE(BM_RangeBasedLoop, std::deque<int>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdDeque_RangeLoop");
-BENCHMARK_TEMPLATE(BM_RangeBasedLoop, std::vector<int>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdVector_RangeLoop");
+BENCHMARK_TEMPLATE(BM_RangeBasedLoop, circular_buffer<int, LARGE_SIZE>)
+    ->Args({SMALL_SIZE})
+    ->Args({MEDIUM_SIZE})
+    ->Args({LARGE_SIZE})
+    ->Name("CircularBuffer_RangeLoop");
+BENCHMARK_TEMPLATE(BM_RangeBasedLoop, std::deque<int>)
+    ->Args({SMALL_SIZE})
+    ->Args({MEDIUM_SIZE})
+    ->Args({LARGE_SIZE})
+    ->Name("StdDeque_RangeLoop");
 
 // =============================================================================
 // Benchmark Registration - STL Algorithms
 // =============================================================================
 
-BENCHMARK_TEMPLATE(BM_STLFind, circular_buffer<int, LARGE_SIZE>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("CircularBuffer_STLFind");
-BENCHMARK_TEMPLATE(BM_STLFind, std::deque<int>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdDeque_STLFind");
-BENCHMARK_TEMPLATE(BM_STLFind, std::vector<int>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdVector_STLFind");
+BENCHMARK_TEMPLATE(BM_STLFind, circular_buffer<int, LARGE_SIZE>)
+    ->Args({SMALL_SIZE})
+    ->Args({MEDIUM_SIZE})
+    ->Args({LARGE_SIZE})
+    ->Name("CircularBuffer_STLFind");
+BENCHMARK_TEMPLATE(BM_STLFind, std::deque<int>)->Args({SMALL_SIZE})->Args({MEDIUM_SIZE})->Args({LARGE_SIZE})->Name("StdDeque_STLFind");
 
-BENCHMARK_TEMPLATE(BM_STLAccumulate, circular_buffer<int, LARGE_SIZE>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("CircularBuffer_STLAccumulate");
-BENCHMARK_TEMPLATE(BM_STLAccumulate, std::deque<int>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdDeque_STLAccumulate");
-BENCHMARK_TEMPLATE(BM_STLAccumulate, std::vector<int>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdVector_STLAccumulate");
+BENCHMARK_TEMPLATE(BM_STLAccumulate, circular_buffer<int, LARGE_SIZE>)
+    ->Args({SMALL_SIZE})
+    ->Args({MEDIUM_SIZE})
+    ->Args({LARGE_SIZE})
+    ->Name("CircularBuffer_STLAccumulate");
+BENCHMARK_TEMPLATE(BM_STLAccumulate, std::deque<int>)
+    ->Args({SMALL_SIZE})
+    ->Args({MEDIUM_SIZE})
+    ->Args({LARGE_SIZE})
+    ->Name("StdDeque_STLAccumulate");
 
 // =============================================================================
 // Benchmark Registration - Wraparound Performance
 // =============================================================================
 
-BENCHMARK_TEMPLATE(BM_Wraparound, circular_buffer<int, 1000>)->Range(10000, 1000000)->Name("CircularBuffer_Wraparound");
+BENCHMARK_TEMPLATE(BM_Wraparound, circular_buffer<int, 1000>)->Args({LARGE_SIZE})->Name("CircularBuffer_Wraparound");
 
 // =============================================================================
 // Benchmark Registration - Construction
@@ -476,28 +514,42 @@ BENCHMARK_TEMPLATE(BM_Wraparound, circular_buffer<int, 1000>)->Range(10000, 1000
 
 BENCHMARK_TEMPLATE(BM_Construction, circular_buffer<int, LARGE_SIZE>)->Name("CircularBuffer_Construction");
 BENCHMARK_TEMPLATE(BM_Construction, std::deque<int>)->Name("StdDeque_Construction");
-BENCHMARK_TEMPLATE(BM_Construction, std::vector<int>)->Name("StdVector_Construction");
 
 BENCHMARK_TEMPLATE(BM_ConstructionWithSize, circular_buffer<int, LARGE_SIZE>)
-    ->Range(SMALL_SIZE, LARGE_SIZE)
+    ->Args({SMALL_SIZE})
+    ->Args({MEDIUM_SIZE})
+    ->Args({LARGE_SIZE})
     ->Name("CircularBuffer_ConstructionWithSize");
-BENCHMARK_TEMPLATE(BM_ConstructionWithSize, std::deque<int>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdDeque_ConstructionWithSize");
-BENCHMARK_TEMPLATE(BM_ConstructionWithSize, std::vector<int>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdVector_ConstructionWithSize");
+BENCHMARK_TEMPLATE(BM_ConstructionWithSize, std::deque<int>)
+    ->Args({SMALL_SIZE})
+    ->Args({MEDIUM_SIZE})
+    ->Args({LARGE_SIZE})
+    ->Name("StdDeque_ConstructionWithSize");
 
 // =============================================================================
 // Benchmark Registration - Complex Types
 // =============================================================================
 
 BENCHMARK_TEMPLATE(BM_StringOperations, circular_buffer<std::string, LARGE_SIZE>)
-    ->Range(SMALL_SIZE, LARGE_SIZE)
+    ->Args({SMALL_SIZE})
+    ->Args({MEDIUM_SIZE})
+    ->Args({LARGE_SIZE})
     ->Name("CircularBuffer_StringOps");
-BENCHMARK_TEMPLATE(BM_StringOperations, std::deque<std::string>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdDeque_StringOps");
-BENCHMARK_TEMPLATE(BM_StringOperations, std::vector<std::string>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdVector_StringOps");
+BENCHMARK_TEMPLATE(BM_StringOperations, std::deque<std::string>)
+    ->Args({SMALL_SIZE})
+    ->Args({MEDIUM_SIZE})
+    ->Args({LARGE_SIZE})
+    ->Name("StdDeque_StringOps");
 
 BENCHMARK_TEMPLATE(BM_VectorOperations, circular_buffer<std::vector<int>, LARGE_SIZE>)
-    ->Range(SMALL_SIZE, LARGE_SIZE)
+    ->Args({SMALL_SIZE})
+    ->Args({MEDIUM_SIZE})
+    ->Args({LARGE_SIZE})
     ->Name("CircularBuffer_VectorOps");
-BENCHMARK_TEMPLATE(BM_VectorOperations, std::deque<std::vector<int>>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdDeque_VectorOps");
-BENCHMARK_TEMPLATE(BM_VectorOperations, std::vector<std::vector<int>>)->Range(SMALL_SIZE, LARGE_SIZE)->Name("StdVector_VectorOps");
+BENCHMARK_TEMPLATE(BM_VectorOperations, std::deque<std::vector<int>>)
+    ->Args({SMALL_SIZE})
+    ->Args({MEDIUM_SIZE})
+    ->Args({LARGE_SIZE})
+    ->Name("StdDeque_VectorOps");
 
 BENCHMARK_MAIN();

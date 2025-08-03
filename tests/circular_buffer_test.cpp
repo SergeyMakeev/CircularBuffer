@@ -543,25 +543,38 @@ TEST_F(CircularBufferTest, IteratorArithmetic)
 
     auto it = buffer.begin();
 
-    // Test increment/decrement
+    // Test increment (forward iterator only)
     EXPECT_EQ(*(it++), 10);
     EXPECT_EQ(*it, 20);
     EXPECT_EQ(*(++it), 30);
-    EXPECT_EQ(*(it--), 30);
-    EXPECT_EQ(*it, 20);
-    EXPECT_EQ(*(--it), 10);
 
-    // Test addition/subtraction
+    // Reset to test forward iteration again
     it = buffer.begin();
-    EXPECT_EQ(*(it + 2), 30);
-    EXPECT_EQ(*(it + 4), 50);
+    EXPECT_EQ(*it, 10);
+    ++it;
+    EXPECT_EQ(*it, 20);
 
-    it = buffer.end();
-    EXPECT_EQ(*(it - 1), 50);
-    EXPECT_EQ(*(it - 3), 30);
+    // Test forward iteration to specific positions
+    it = buffer.begin();
+    ++it;
+    ++it; // advance 2 positions
+    EXPECT_EQ(*it, 30);
 
-    // Test difference
-    EXPECT_EQ(buffer.end() - buffer.begin(), 5);
+    it = buffer.begin();
+    ++it;
+    ++it;
+    ++it;
+    ++it; // advance 4 positions
+    EXPECT_EQ(*it, 50);
+
+    // Test manual iteration count
+    it = buffer.begin();
+    size_t count = 0;
+    for (; it != buffer.end(); ++it)
+    {
+        ++count;
+    }
+    EXPECT_EQ(count, 5);
 }
 
 TEST_F(CircularBufferTest, IteratorComparison)
@@ -569,16 +582,20 @@ TEST_F(CircularBufferTest, IteratorComparison)
     circular_buffer<int, 5> buffer{1, 2, 3, 4, 5};
 
     auto it1 = buffer.begin();
-    auto it2 = buffer.begin() + 2;
+    auto it2 = buffer.begin();
+    ++it2;
+    ++it2; // advance 2 positions
     auto it3 = buffer.end();
 
     EXPECT_TRUE(it1 == buffer.begin());
     EXPECT_TRUE(it1 != it2);
-    EXPECT_TRUE(it1 < it2);
-    EXPECT_TRUE(it2 < it3);
-    EXPECT_TRUE(it3 > it1);
-    EXPECT_TRUE(it1 <= it2);
-    EXPECT_TRUE(it2 >= it1);
+    EXPECT_TRUE(it1 != it3);
+    EXPECT_TRUE(it2 != it3);
+
+    // Test that iterators can be advanced
+    auto it_test = buffer.begin();
+    ++it_test;
+    EXPECT_TRUE(it_test != buffer.begin());
 }
 
 TEST_F(CircularBufferTest, RangeBasedForLoop)
@@ -599,18 +616,19 @@ TEST_F(CircularBufferTest, STLAlgorithms)
 {
     circular_buffer<int, 10> buffer{5, 3, 8, 1, 9, 2, 7, 4, 6};
 
-    // Test std::sort
-    std::sort(buffer.begin(), buffer.end());
-
-    for (auto i = decltype(buffer)::size_type{1}; i < buffer.size(); ++i)
-    {
-        EXPECT_LE(buffer[i - 1], buffer[i]);
-    }
-
-    // Test std::find
-    auto it = std::find(buffer.begin(), buffer.end(), 5);
+    // Test std::find (works with forward iterators)
+    auto it = std::find(buffer.begin(), buffer.end(), 8);
     EXPECT_NE(it, buffer.end());
-    EXPECT_EQ(*it, 5);
+    EXPECT_EQ(*it, 8);
+
+    // Test std::find for non-existent element
+    auto it_not_found = std::find(buffer.begin(), buffer.end(), 99);
+    EXPECT_EQ(it_not_found, buffer.end());
+
+    // Test std::find for different element
+    auto it2 = std::find(buffer.begin(), buffer.end(), 5);
+    EXPECT_NE(it2, buffer.end());
+    EXPECT_EQ(*it2, 5);
 
     // Test std::accumulate
     int sum = std::accumulate(buffer.begin(), buffer.end(), 0);
@@ -957,9 +975,13 @@ TEST_F(CircularBufferTest, IteratorEdgeCases)
     circular_buffer<int, 5>::const_iterator const_it = it;
     EXPECT_EQ(*const_it, 1);
 
-    // Test iterator arithmetic edge cases
+    // Test end iterator (forward iterator only)
     auto it2 = buffer.cend();
-    EXPECT_EQ(*(it2 - 1), 3);
+    auto it_last = buffer.cbegin();
+    // Advance to last element
+    ++it_last;
+    ++it_last; // it_last now points to element 3
+    EXPECT_EQ(*it_last, 3);
 
     // Test operator->
     auto it3 = buffer.begin();

@@ -3,7 +3,7 @@
 Performance Benchmark Analysis Tool for CircularBuffer (ASCII version)
 
 Analyzes benchmark JSON output and generates comprehensive performance comparisons
-between CircularBuffer, std::deque, and std::vector across various operations.
+between CircularBuffer and std::deque across various operations.
 """
 
 import json
@@ -132,50 +132,50 @@ class BenchmarkAnalyzer:
         
         if not size_comparisons:
             # Handle operations without sizes (like Construction)
-            results.append("Single benchmark comparison:")
+            results.append("Single benchmark comparison (iterations):")
             fastest_container = None
-            fastest_time = float('inf')
+            highest_iterations = 0
             
             for container, benchmarks in containers.items():
                 if benchmarks:
                     bench = benchmarks[0]  # Take first (should be only one)
-                    time_ms = bench.cpu_time / 1_000_000  # Convert to milliseconds
-                    results.append(f"  {container:15}: {time_ms:8.3f} ms")
+                    iterations = bench.iterations
+                    results.append(f"  {container:15}: {iterations:,} iter")
                     
-                    if bench.cpu_time < fastest_time:
-                        fastest_time = bench.cpu_time
+                    if bench.iterations > highest_iterations:
+                        highest_iterations = bench.iterations
                         fastest_container = container
             
             if fastest_container:
                 results.append(f"  [WINNER]: {fastest_container}")
         else:
             # Compare across different sizes
-            results.append("Performance by input size:")
-            results.append(f"{'Size':<8} {'CircularBuffer':<15} {'std::deque':<15} {'std::vector':<15} {'Winner':<15}")
-            results.append("-" * 75)
+            results.append("Performance by input size (iterations completed):")
+            results.append(f"{'Size':<8} {'CircularBuffer':<15} {'std::deque':<15} {'Winner':<15}")
+            results.append("-" * 60)
             
             for size in sorted(size_comparisons.keys()):
                 size_data = size_comparisons[size]
                 
-                # Convert times to milliseconds and find winner
-                times = {}
+                # Get iterations and find winner (higher iterations = better performance)
+                iterations = {}
                 for container, bench in size_data.items():
-                    times[container] = bench.cpu_time / 1_000_000
+                    iterations[container] = bench.iterations
                 
-                # Find fastest
-                if times:
-                    winner = min(times, key=times.get)
+                # Find fastest (highest iterations)
+                if iterations:
+                    winner = max(iterations, key=iterations.get)
                     
                     # Format row
                     row = f"{size:<8}"
-                    for container in ['CircularBuffer', 'std::deque', 'std::vector']:
-                        if container in times:
-                            time_str = f"{times[container]:.3f} ms"
+                    for container in ['CircularBuffer', 'std::deque']:
+                        if container in iterations:
+                            iter_str = f"{iterations[container]:,} iter"
                             if container == winner:
-                                time_str = f"*{time_str}*"
+                                iter_str = f"*{iter_str}*"
                         else:
-                            time_str = "N/A"
-                        row += f" {time_str:<15}"
+                            iter_str = "N/A"
+                        row += f" {iter_str:<15}"
                     
                     results.append(row)
             
@@ -189,19 +189,19 @@ class BenchmarkAnalyzer:
         return results
     
     def _add_performance_ratios(self, results: List[str], benchmarks: Dict[str, BenchmarkResult]):
-        """Add performance ratio comparisons."""
+        """Add performance ratio comparisons based on iterations."""
         if 'CircularBuffer' not in benchmarks:
             return
         
-        cb_time = benchmarks['CircularBuffer'].cpu_time
+        cb_iterations = benchmarks['CircularBuffer'].iterations
         
         for container, bench in benchmarks.items():
             if container != 'CircularBuffer':
-                ratio = bench.cpu_time / cb_time
+                ratio = bench.iterations / cb_iterations
                 if ratio > 1:
-                    results.append(f"  CircularBuffer is {ratio:.2f}x faster than {container}")
+                    results.append(f"  {container} is {ratio:.2f}x faster than CircularBuffer")
                 else:
-                    results.append(f"  {container} is {1/ratio:.2f}x faster than CircularBuffer")
+                    results.append(f"  CircularBuffer is {1/ratio:.2f}x faster than {container}")
     
     def _generate_overall_summary(self) -> List[str]:
         """Generate overall performance summary."""
@@ -223,7 +223,7 @@ class BenchmarkAnalyzer:
             
             for size_data in size_comparisons.values():
                 if len(size_data) >= 2:  # Need at least 2 containers to compare
-                    fastest = min(size_data, key=lambda c: size_data[c].cpu_time)
+                    fastest = max(size_data, key=lambda c: size_data[c].iterations)
                     wins[fastest] += 1
                     total_comparisons += 1
         
@@ -243,17 +243,17 @@ class BenchmarkAnalyzer:
         for operation, containers in self.operations.items():
             if 'CircularBuffer' in containers and len(containers) >= 2:
                 # Find if CircularBuffer is fastest for this operation (average across sizes)
-                cb_avg_time = self._get_average_time(containers['CircularBuffer'])
-                other_avg_times = [
-                    self._get_average_time(benchmarks) 
+                cb_avg_iterations = self._get_average_iterations(containers['CircularBuffer'])
+                other_avg_iterations = [
+                    self._get_average_iterations(benchmarks) 
                     for container, benchmarks in containers.items() 
                     if container != 'CircularBuffer'
                 ]
                 
-                if cb_avg_time and other_avg_times:
-                    if cb_avg_time < min(other_avg_times):
+                if cb_avg_iterations and other_avg_iterations:
+                    if cb_avg_iterations > max(other_avg_iterations):
                         cb_strengths.append(operation)
-                    elif cb_avg_time > max(other_avg_times):
+                    elif cb_avg_iterations < min(other_avg_iterations):
                         cb_weaknesses.append(operation)
         
         if cb_strengths:
@@ -263,16 +263,16 @@ class BenchmarkAnalyzer:
         
         # Memory efficiency note
         results.append("  [*] CircularBuffer offers predictable memory usage (no dynamic allocation)")
-        results.append("  [*] CircularBuffer provides O(1) push_front operations vs vector's O(n)")
+        results.append("  [*] CircularBuffer provides O(1) push_front operations (same as std::deque)")
         results.append("  [*] CircularBuffer maintains consistent performance with wraparound")
         
         return results
     
-    def _get_average_time(self, benchmarks: List[BenchmarkResult]) -> Optional[float]:
-        """Get average CPU time for a list of benchmarks."""
+    def _get_average_iterations(self, benchmarks: List[BenchmarkResult]) -> Optional[float]:
+        """Get average iterations for a list of benchmarks."""
         if not benchmarks:
             return None
-        return statistics.mean(bench.cpu_time for bench in benchmarks)
+        return statistics.mean(bench.iterations for bench in benchmarks)
     
     def export_csv(self, filename: str):
         """Export results to CSV for further analysis."""

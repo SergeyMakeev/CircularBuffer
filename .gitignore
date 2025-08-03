@@ -3,5 +3,5 @@ examples
 build2022
 codecov_report
 LastCoverageResults.log
-tools/test_report.txt
 performance_results.json
+tools/*test_report*.txt
