@@ -162,7 +162,7 @@ class circular_buffer
 
   private:
     // inline storage
-    struct alignas(safe_alignment) inline_storage_t
+    struct inline_storage_t
     {
         std::array<std::byte, sizeof(T) * Capacity> data;
     };
