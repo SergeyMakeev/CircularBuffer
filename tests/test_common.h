@@ -14,72 +14,64 @@ for testing circular buffer behavior with non-trivial types.
 */
 class TestObject
 {
-public:
+  public:
     static int constructor_calls;
     static int destructor_calls;
     static int copy_calls;
     static int move_calls;
-    
+
     int value;
-    
-    TestObject() : value(0) 
-    { 
-        ++constructor_calls; 
+
+    TestObject()
+        : value(0)
+    {
+        ++constructor_calls;
     }
-    
-    explicit TestObject(int v) : value(v) 
-    { 
-        ++constructor_calls; 
+
+    explicit TestObject(int v)
+        : value(v)
+    {
+        ++constructor_calls;
     }
-    
-    TestObject(const TestObject& other) : value(other.value) 
-    { 
-        ++constructor_calls; 
-        ++copy_calls; 
+
+    TestObject(const TestObject& other)
+        : value(other.value)
+    {
+        ++constructor_calls;
+        ++copy_calls;
     }
-    
-    TestObject(TestObject&& other) noexcept : value(other.value) 
-    { 
-        ++constructor_calls; 
-        ++move_calls; 
+
+    TestObject(TestObject&& other) noexcept
+        : value(other.value)
+    {
+        ++constructor_calls;
+        ++move_calls;
         other.value = -1; // Mark as moved-from
     }
-    
-    TestObject& operator=(const TestObject& other) 
-    { 
-        value = other.value; 
-        ++copy_calls; 
-        return *this; 
+
+    TestObject& operator=(const TestObject& other)
+    {
+        value = other.value;
+        ++copy_calls;
+        return *this;
     }
-    
-    TestObject& operator=(TestObject&& other) noexcept 
-    { 
-        value = other.value; 
-        ++move_calls; 
+
+    TestObject& operator=(TestObject&& other) noexcept
+    {
+        value = other.value;
+        ++move_calls;
         other.value = -1; // Mark as moved-from
-        return *this; 
+        return *this;
     }
-    
-    ~TestObject() 
-    { 
-        ++destructor_calls; 
-    }
-    
-    bool operator==(const TestObject& other) const 
-    { 
-        return value == other.value; 
-    }
-    
-    bool operator!=(const TestObject& other) const 
-    { 
-        return !(*this == other); 
-    }
-    
-    bool operator<(const TestObject& other) const 
-    { 
-        return value < other.value; 
-    }
-    
+
+    ~TestObject() { ++destructor_calls; }
+
+    bool operator==(const TestObject& other) const { return value == other.value; }
+
+    bool operator!=(const TestObject& other) const { return !(*this == other); }
+
+    bool operator<(const TestObject& other) const { return value < other.value; }
+
     static void reset_counters()
     {
         constructor_calls = 0;
@@ -100,52 +92,49 @@ Cannot be copied, only moved. Useful for testing move semantics.
 */
 class MoveOnlyObject
 {
-public:
+  public:
     static int constructor_calls;
     static int destructor_calls;
     static int move_calls;
-    
+
     int value;
-    
-    MoveOnlyObject() : value(0) 
-    { 
-        ++constructor_calls; 
+
+    MoveOnlyObject()
+        : value(0)
+    {
+        ++constructor_calls;
     }
-    
-    explicit MoveOnlyObject(int v) : value(v) 
-    { 
-        ++constructor_calls; 
+
+    explicit MoveOnlyObject(int v)
+        : value(v)
+    {
+        ++constructor_calls;
     }
-    
+
     // Delete copy constructor and copy assignment
     MoveOnlyObject(const MoveOnlyObject&) = delete;
     MoveOnlyObject& operator=(const MoveOnlyObject&) = delete;
-    
-    MoveOnlyObject(MoveOnlyObject&& other) noexcept : value(other.value) 
-    { 
-        ++constructor_calls; 
-        ++move_calls; 
-        other.value = -1; 
+
+    MoveOnlyObject(MoveOnlyObject&& other) noexcept
+        : value(other.value)
+    {
+        ++constructor_calls;
+        ++move_calls;
+        other.value = -1;
     }
-    
-    MoveOnlyObject& operator=(MoveOnlyObject&& other) noexcept 
-    { 
-        value = other.value; 
-        ++move_calls; 
-        other.value = -1; 
-        return *this; 
+
+    MoveOnlyObject& operator=(MoveOnlyObject&& other) noexcept
+    {
+        value = other.value;
+        ++move_calls;
+        other.value = -1;
+        return *this;
     }
-    
-    ~MoveOnlyObject() 
-    { 
-        ++destructor_calls; 
-    }
-    
-    bool operator==(const MoveOnlyObject& other) const 
-    { 
-        return value == other.value; 
-    }
-    
+
+    ~MoveOnlyObject() { ++destructor_calls; }
+
+    bool operator==(const MoveOnlyObject& other) const { return value == other.value; }
+
     static void reset_counters()
     {
         constructor_calls = 0;
@@ -166,71 +155,78 @@ operations for testing exception safety.
 */
 class ExceptionObject
 {
-public:
+  public:
     static bool throw_on_construction;
     static bool throw_on_copy;
     static bool throw_on_move;
     static int construction_count;
-    
+
     int value;
-    
-    ExceptionObject() : value(0) 
+
+    ExceptionObject()
+        : value(0)
     {
         ++construction_count;
-        if (throw_on_construction) {
+        if (throw_on_construction)
+        {
             throw std::runtime_error("Construction exception");
         }
     }
-    
-    explicit ExceptionObject(int v) : value(v) 
+
+    explicit ExceptionObject(int v)
+        : value(v)
     {
         ++construction_count;
-        if (throw_on_construction) {
+        if (throw_on_construction)
+        {
             throw std::runtime_error("Construction exception");
         }
     }
-    
-    ExceptionObject(const ExceptionObject& other) : value(other.value) 
+
+    ExceptionObject(const ExceptionObject& other)
+        : value(other.value)
     {
         ++construction_count;
-        if (throw_on_copy) {
+        if (throw_on_copy)
+        {
             throw std::runtime_error("Copy exception");
         }
     }
-    
-    ExceptionObject(ExceptionObject&& other) noexcept(false) : value(other.value) 
+
+    ExceptionObject(ExceptionObject&& other) noexcept(false)
+        : value(other.value)
     {
         ++construction_count;
-        if (throw_on_move) {
+        if (throw_on_move)
+        {
             throw std::runtime_error("Move exception");
         }
         other.value = -1;
     }
-    
-    ExceptionObject& operator=(const ExceptionObject& other) 
+
+    ExceptionObject& operator=(const ExceptionObject& other)
     {
-        if (throw_on_copy) {
+        if (throw_on_copy)
+        {
             throw std::runtime_error("Copy assignment exception");
         }
         value = other.value;
         return *this;
     }
-    
-    ExceptionObject& operator=(ExceptionObject&& other) noexcept(false) 
+
+    ExceptionObject& operator=(ExceptionObject&& other) noexcept(false)
     {
-        if (throw_on_move) {
+        if (throw_on_move)
+        {
             throw std::runtime_error("Move assignment exception");
         }
         value = other.value;
         other.value = -1;
         return *this;
     }
-    
-    ~ExceptionObject() 
-    {
-        --construction_count;
-    }
-    
+
+    ~ExceptionObject() { --construction_count; }
+
     static void reset_flags()
     {
         throw_on_construction = false;
@@ -251,26 +247,30 @@ Simulates objects that benefit from custom alignment (e.g., SIMD types).
 */
 struct alignas(32) LargeAlignedObject
 {
-    double data[4];  // 32 bytes, 32-byte aligned
-    
-    LargeAlignedObject() 
+    double data[4]; // 32 bytes, 32-byte aligned
+
+    LargeAlignedObject()
     {
-        for (int i = 0; i < 4; ++i) {
+        for (int i = 0; i < 4; ++i)
+        {
             data[i] = 0.0;
         }
     }
-    
-    explicit LargeAlignedObject(double value) 
+
+    explicit LargeAlignedObject(double value)
     {
-        for (int i = 0; i < 4; ++i) {
+        for (int i = 0; i < 4; ++i)
+        {
             data[i] = value;
         }
     }
-    
+
     bool operator==(const LargeAlignedObject& other) const
     {
-        for (int i = 0; i < 4; ++i) {
-            if (data[i] != other.data[i]) {
+        for (int i = 0; i < 4; ++i)
+        {
+            if (data[i] != other.data[i])
+            {
                 return false;
             }
         }
@@ -287,69 +287,75 @@ Provides common setup and teardown for circular buffer tests.
 */
 class CircularBufferTestBase
 {
-protected:
-    void SetUp() 
+  protected:
+    void SetUp()
     {
         TestObject::reset_counters();
         MoveOnlyObject::reset_counters();
         ExceptionObject::reset_flags();
     }
-    
-    void TearDown() 
+
+    void TearDown()
     {
         // Verify no memory leaks (constructor calls should equal destructor calls)
         // Note: This is a basic check, real memory leak detection should use tools like Valgrind
     }
-    
+
     // Helper to create a vector of test objects
     std::vector<int> create_test_data(size_t count, int start_value = 0)
     {
         std::vector<int> data;
         data.reserve(count);
-        for (size_t i = 0; i < count; ++i) {
+        for (size_t i = 0; i < count; ++i)
+        {
             data.push_back(start_value + static_cast<int>(i));
         }
         return data;
     }
-    
+
     // Helper to verify buffer contents match expected values
-    template<typename BufferType>
-    bool verify_buffer_contents(const BufferType& buffer, const std::vector<int>& expected)
+    template <typename BufferType> bool verify_buffer_contents(const BufferType& buffer, const std::vector<int>& expected)
     {
-        if (buffer.size() != expected.size()) {
+        if (buffer.size() != expected.size())
+        {
             return false;
         }
-        
-        for (auto i = typename BufferType::size_type{0}; i < expected.size(); ++i) {
-            if (buffer[i] != expected[i]) {
+
+        for (auto i = typename BufferType::size_type{0}; i < expected.size(); ++i)
+        {
+            if (buffer[i] != expected[i])
+            {
                 return false;
             }
         }
-        
+
         return true;
     }
-    
+
     // Helper to verify iterator consistency
-    template<typename BufferType>
-    bool verify_iterator_consistency(const BufferType& buffer)
+    template <typename BufferType> bool verify_iterator_consistency(const BufferType& buffer)
     {
         // Verify begin/end consistency
         auto distance = std::distance(buffer.begin(), buffer.end());
-        if (static_cast<size_t>(distance) != buffer.size()) {
+        if (static_cast<size_t>(distance) != buffer.size())
+        {
             return false;
         }
-        
+
         // Verify random access consistency
         auto it = buffer.begin();
-        for (auto i = typename BufferType::size_type{0}; i < buffer.size(); ++i, ++it) {
-            if (it != buffer.begin() + i) {
+        for (auto i = typename BufferType::size_type{0}; i < buffer.size(); ++i, ++it)
+        {
+            if (it != buffer.begin() + i)
+            {
                 return false;
             }
-            if (*it != buffer[i]) {
+            if (*it != buffer[i])
+            {
                 return false;
             }
         }
-        
+
         return true;
     }
 };
@@ -363,30 +369,26 @@ protected:
 
 class PerformanceTimer
 {
-public:
+  public:
     using clock_type = std::chrono::high_resolution_clock;
     using duration_type = std::chrono::nanoseconds;
-    
-    void start()
-    {
-        start_time = clock_type::now();
-    }
-    
+
+    void start() { start_time = clock_type::now(); }
+
     duration_type stop()
     {
         auto end_time = clock_type::now();
         return std::chrono::duration_cast<duration_type>(end_time - start_time);
     }
-    
-    template<typename Func>
-    duration_type measure(Func&& func)
+
+    template <typename Func> duration_type measure(Func&& func)
     {
         start();
         func();
         return stop();
     }
-    
-private:
+
+  private:
     clock_type::time_point start_time;
 };
 
@@ -395,23 +397,24 @@ private:
 **Memory alignment verification utilities**
 
 */
-template<typename T, size_t Alignment>
-bool is_properly_aligned(const T* ptr)
+template <typename T, size_t Alignment> bool is_properly_aligned(const T* ptr)
 {
     return (reinterpret_cast<uintptr_t>(ptr) % Alignment) == 0;
 }
 
-template<typename BufferType>
-bool verify_buffer_alignment()
+template <typename BufferType> bool verify_buffer_alignment()
 {
     BufferType buffer;
-    
+
     // For embedded storage, check if the buffer object itself is aligned
-    if constexpr (BufferType::uses_embedded()) {
+    if constexpr (BufferType::uses_embedded())
+    {
         return is_properly_aligned<BufferType, BufferType::alignment>(&buffer);
-    } else {
+    }
+    else
+    {
         // For heap storage, we can't easily check without exposing internals
         // This would require friend access or public methods
         return true; // Assume alignment is correct for heap allocation
     }
-} 
+}

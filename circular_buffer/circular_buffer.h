@@ -140,7 +140,7 @@ class circular_buffer
 
     // Storage strategy selection
     static constexpr bool uses_inline_storage = (Capacity <= InlineThreshold);
-    
+
     // Compute safe alignment at compile time for macOS compatibility
     static constexpr size_t safe_alignment = Alignment < alignof(void*) ? alignof(void*) : Alignment;
 
