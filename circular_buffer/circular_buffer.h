@@ -145,15 +145,15 @@ struct bulk_insert_result
 
 **High-performance circular buffer implementation**
 
-A fixed-capacity circular buffer that stores exactly N elements without the N-1 limitation.
+A fixed-capacity circular buffer that stores exactly N elements (no typical N-1 size limitation)
 Uses separate head/tail/size tracking for full capacity utilization.
 
 Key features:
 - O(1) push/pop operations at both ends
 - STL-compatible interface with iterators
-- Configurable storage strategy (embedded vs heap)
+- Configurable storage strategy (inline vs heap)
 - Configurable index types for memory optimization
-- Custom alignment support for SIMD operations
+- Custom alignment support
 - Overflow policies with result feedback
 
 Template parameters:
@@ -161,16 +161,16 @@ Template parameters:
 - Capacity: Fixed buffer size (> 0)
 - IndexType: Type for indices and size (default: uint32_t)
 - Alignment: Memory alignment (default: alignof(T))
-- EmbeddedThreshold: Cutoff for embedded vs heap storage (default: 64 elements)
+- InlineThreshold: Cutoff for inline vs heap storage (default: 64 elements)
 - Policy: Overflow behavior (default: overwrite)
 
 */
 template<typename T,
          size_t Capacity,
+         overflow_policy Policy = overflow_policy::overwrite,
          typename IndexType = uint32_t,
-         size_t Alignment = alignof(T),
-         size_t EmbeddedThreshold = 64,
-         overflow_policy Policy = overflow_policy::overwrite>
+         size_t InlineThreshold = 64,
+         size_t Alignment = alignof(T)>
 class circular_buffer
 {
     static_assert(std::is_unsigned_v<IndexType>, "IndexType must be unsigned integer");
@@ -196,15 +196,18 @@ public:
     using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
 private:
-    // Storage strategy selection
-    static constexpr bool uses_embedded_storage = (Capacity <= EmbeddedThreshold);
     
-    // Storage types with proper alignment
-    struct alignas(Alignment) embedded_storage_t {
+    // inline storage
+    struct alignas(Alignment) inline_storage_t {
         std::array<std::byte, sizeof(T) * Capacity> data;
     };
+
+    // heap storage
     using heap_storage_t = T*;
-    using storage_t = std::conditional_t<uses_embedded_storage, embedded_storage_t, heap_storage_t>;
+
+    // Storage strategy selection
+    static constexpr bool uses_inline_storage = (Capacity <= InlineThreshold);
+    using storage_t = std::conditional_t<uses_inline_storage, inline_storage_t, heap_storage_t>;
 
     storage_t m_storage;
     IndexType m_head = 0;      // Write position (next insert location)
@@ -218,7 +221,7 @@ private:
     // Helper methods
     T* get_storage() noexcept
     {
-        if constexpr (uses_embedded_storage) {
+        if constexpr (uses_inline_storage) {
             return reinterpret_cast<T*>(m_storage.data.data());
         } else {
             return m_storage;
@@ -227,7 +230,7 @@ private:
 
     const T* get_storage() const noexcept
     {
-        if constexpr (uses_embedded_storage) {
+        if constexpr (uses_inline_storage) {
             return reinterpret_cast<const T*>(m_storage.data.data());
         } else {
             return m_storage;
@@ -408,7 +411,7 @@ private:
 
     void allocate_storage()
     {
-        if constexpr (!uses_embedded_storage) {
+        if constexpr (!uses_inline_storage) {
             m_storage = static_cast<T*>(CIRCULAR_BUFFER_ALLOC(sizeof(T) * Capacity, Alignment));
             CIRCULAR_BUFFER_ASSERT(m_storage != nullptr);
         }
@@ -416,7 +419,7 @@ private:
 
     void deallocate_storage() noexcept
     {
-        if constexpr (!uses_embedded_storage) {
+        if constexpr (!uses_inline_storage) {
             if (m_storage) {
                 CIRCULAR_BUFFER_FREE(m_storage);
                 m_storage = nullptr;
@@ -428,8 +431,8 @@ public:
     // Returns the fixed capacity
     static constexpr size_type capacity() noexcept { return Capacity; }
 
-    // Returns whether embedded storage is used
-    static constexpr bool uses_embedded() noexcept { return uses_embedded_storage; }
+    // Returns whether inline storage is used
+    static constexpr bool uses_inline_storage() noexcept { return uses_inline_storage; }
 
     /*
 
@@ -527,8 +530,8 @@ public:
         : m_iterator_list(nullptr)
 #endif
     {
-        if constexpr (uses_embedded_storage) {
-            // Embedded storage: must move elements individually
+        if constexpr (uses_inline_storage) {
+            // Inline storage: must move elements individually
             allocate_storage();
             T* storage = get_storage();
             T* other_storage = other.get_storage();
@@ -602,8 +605,8 @@ public:
         if (this != &other) {
             destroy_all();
             
-            if constexpr (uses_embedded_storage) {
-                // Embedded storage: must move elements individually
+            if constexpr (uses_inline_storage) {
+                // Inline storage: must move elements individually
                 T* storage = get_storage();
                 T* other_storage = other.get_storage();
                 
@@ -1043,10 +1046,10 @@ public:
 };
 
 // Global operator+ for iterator + difference_type
-template<typename T, size_t Capacity, typename IndexType, size_t Alignment, size_t EmbeddedThreshold, overflow_policy Policy, bool IsConst>
-typename circular_buffer<T, Capacity, IndexType, Alignment, EmbeddedThreshold, Policy>::template iterator_impl<IsConst>
-operator+(typename circular_buffer<T, Capacity, IndexType, Alignment, EmbeddedThreshold, Policy>::template iterator_impl<IsConst>::difference_type n,
-          const typename circular_buffer<T, Capacity, IndexType, Alignment, EmbeddedThreshold, Policy>::template iterator_impl<IsConst>& it) noexcept
+template<typename T, size_t Capacity, overflow_policy Policy, typename IndexType, size_t InlineThreshold, size_t Alignment, bool IsConst>
+typename circular_buffer<T, Capacity, Policy, IndexType, InlineThreshold, Alignment>::template iterator_impl<IsConst>
+operator+(typename circular_buffer<T, Capacity, Policy, IndexType, InlineThreshold, Alignment>::template iterator_impl<IsConst>::difference_type n,
+          const typename circular_buffer<T, Capacity, Policy, IndexType, InlineThreshold, Alignment>::template iterator_impl<IsConst>& it) noexcept
 {
     return it + n;
 }
