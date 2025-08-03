@@ -14,7 +14,7 @@
 #include <type_traits>
 #include <utility>
 
-#define CIRCULAR_BUFFER_INLINE __forceinline
+#define CIRCULAR_BUFFER_INLINE inline
 // C++20 attributes with fallback for older standards
 #if __cplusplus >= 202002L
 #define CIRCULAR_BUFFER_LIKELY [[likely]]
