@@ -4,6 +4,8 @@
 
 A high-performance, header-only circular buffer implementation that stores exactly N elements without the N-1 limitation found in many implementations. The design emphasizes performance, type safety, and flexible memory management while maintaining STL compatibility.
 
+**Key Innovation**: Uses separate read/write indices with explicit size tracking to achieve full capacity utilization without the typical "one empty slot" limitation.
+
 ## 🏗️ Core Design Principles
 
 ### **1. Full Capacity Utilization**
@@ -31,15 +33,20 @@ A high-performance, header-only circular buffer implementation that stores exact
 - SIMD-friendly alignments (16, 32, 64 bytes)
 - Automatic alignment optimization for performance-critical types
 
+### **6. Platform Abstraction**
+- Custom allocator support via preprocessor macros
+- Platform-specific optimizations (Windows vs POSIX)
+- Configurable assertions for debugging
+
 ## 📋 Template Signature
 
 ```cpp
 template<typename T,                                           // Element type
          size_t Capacity,                                      // Fixed buffer size  
+         overflow_policy Policy = overflow_policy::overwrite,  // Overflow behavior
          typename IndexType = uint32_t,                        // Index type
-         size_t Alignment = alignof(T),                        // Memory alignment
-         size_t EmbeddedThreshold = 64,                        // Embedded vs heap cutoff  
-         overflow_policy Policy = overflow_policy::overwrite>  // Overflow behavior
+         size_t InlineThreshold = 64,                          // Embedded vs heap cutoff
+         size_t Alignment = alignof(T)>                        // Memory alignment
 class circular_buffer;
 ```
 
@@ -49,15 +56,26 @@ class circular_buffer;
 |-----------|---------|---------|-------------|
 | `T` | Element type | - | Copyable/movable type |
 | `Capacity` | Fixed buffer size | - | > 0, ≤ max(IndexType) |
-| `IndexType` | Index/size type | `uint32_t` | Unsigned integer type |
-| `Alignment` | Memory alignment | `alignof(T)` | Power of 2 |
-| `EmbeddedThreshold` | Embedded/heap cutoff | 64 | Element count |
 | `Policy` | Overflow behavior | `overwrite` | `overwrite` or `discard` |
+| `IndexType` | Index/size type | `uint32_t` | Unsigned integer type |
+| `InlineThreshold` | Embedded/heap cutoff | 64 | Element count |
+| `Alignment` | Memory alignment | `alignof(T)` | Power of 2, ≥ alignof(T) |
+
+### **Template Parameter Validation**
+
+The implementation includes compile-time checks:
+```cpp
+static_assert(std::is_unsigned_v<IndexType>, "IndexType must be unsigned integer");
+static_assert(Capacity > 0, "Capacity must be greater than 0");
+static_assert(Capacity <= std::numeric_limits<IndexType>::max(), "Capacity too large for IndexType");
+static_assert((Alignment & (Alignment - 1)) == 0, "Alignment must be power of 2");
+static_assert(Alignment >= alignof(T), "Alignment must be at least alignof(T)");
+```
 
 ## 🚀 Storage Strategy
 
 ### **Embedded Storage (Small Buffers)**
-- Used when `Capacity <= EmbeddedThreshold`
+- Used when `Capacity <= InlineThreshold`
 - Storage array embedded directly in container object
 - Excellent cache locality, zero allocation overhead
 - Suitable for stack allocation
@@ -68,7 +86,7 @@ circular_buffer<int, 32> small_buffer;  // ~140 bytes total object size
 ```
 
 ### **Heap Storage (Large Buffers)**
-- Used when `Capacity > EmbeddedThreshold`
+- Used when `Capacity > InlineThreshold`
 - Storage allocated on heap with custom alignment
 - Lightweight container object (~12-24 bytes)
 - Single allocation at construction time
@@ -82,13 +100,31 @@ circular_buffer<int, 1024> large_buffer;  // ~16 bytes container + 4KB heap
 
 ```cpp
 // Embedded storage variants
-circular_buffer<int, 64, uint8_t> tiny_embedded;           // ~259 bytes
-circular_buffer<float, 32, uint16_t, 32> simd_embedded;    // ~134 bytes, 32-byte aligned
+circular_buffer<int, 64, overflow_policy::overwrite, uint8_t> tiny_embedded;           // ~259 bytes
+circular_buffer<float, 32, overflow_policy::overwrite, uint16_t, 64, 32> simd_embedded;    // ~134 bytes, 32-byte aligned
 
 // Heap storage variants  
-circular_buffer<MyStruct, 256, uint32_t> standard_heap;    // ~16 bytes container
-circular_buffer<double, 1000, uint32_t, 64> aligned_heap;  // ~16 bytes, 64-byte aligned
+circular_buffer<MyStruct, 256> standard_heap;    // ~16 bytes container
+circular_buffer<double, 1000, overflow_policy::overwrite, uint32_t, 64, 64> aligned_heap;  // ~16 bytes, 64-byte aligned
 ```
+
+### **Platform-Specific Memory Allocation**
+
+The implementation uses different allocation strategies per platform:
+
+**Windows (MSVC)**:
+```cpp
+#define CIRCULAR_BUFFER_ALLOC(size, alignment) _mm_malloc(size, alignment)
+#define CIRCULAR_BUFFER_FREE(ptr) _mm_free(ptr)
+```
+
+**POSIX (Linux/macOS)**:
+```cpp
+#define CIRCULAR_BUFFER_ALLOC(size, alignment) aligned_alloc(alignment, round_up_to_alignment(size, alignment))
+#define CIRCULAR_BUFFER_FREE(ptr) free(ptr)
+```
+
+**Custom Allocation**: Users can override by defining macros before including the header.
 
 ## 📊 Index Type Optimization
 
@@ -98,116 +134,118 @@ circular_buffer<double, 1000, uint32_t, 64> aligned_heap;  // ~16 bytes, 64-byte
 |------------|--------------|-------------------|----------|
 | `uint8_t`  | 255         | 3 bytes           | Tiny buffers |
 | `uint16_t` | 65,535      | 6 bytes           | Small buffers |
-| `uint32_t` | 4.2B        | 12 bytes          | Standard use |
-| `uint64_t` | 18E         | 24 bytes          | Massive buffers |
+| `uint32_t` | 4.2 billion | 12 bytes          | Standard use |
+| `uint64_t` | Massive     | 24 bytes          | Future-proofing |
 
-### **Performance Optimizations by Index Type**
+### **Index Type Selection Guidelines**
 
 ```cpp
-// Power-of-2 capacity optimization
-template<typename IndexType, size_t Capacity>
-constexpr IndexType next_index(IndexType current) noexcept {
-    if constexpr ((Capacity & (Capacity - 1)) == 0) {
-        return (current + 1) & (Capacity - 1);  // Bit masking
-    } else {
-        return (current + 1) % Capacity;         // Modulo
+// Memory-optimized examples
+circular_buffer<uint8_t, 200, overflow_policy::overwrite, uint8_t> byte_queue;     // 3-byte overhead
+circular_buffer<Packet, 1000, overflow_policy::overwrite, uint16_t> packet_buffer; // 6-byte overhead  
+circular_buffer<Event, 100000, overflow_policy::overwrite, uint32_t> event_log;    // 12-byte overhead
+```
+
+### **Index Calculation Optimization**
+
+The implementation includes power-of-2 optimizations:
+
+```cpp
+constexpr IndexType next_index(IndexType index) const noexcept
+{
+    if constexpr ((Capacity & (Capacity - 1)) == 0)
+    {
+        // Power of 2: use bit masking (faster)
+        return (index + 1) & (Capacity - 1);
+    }
+    else
+    {
+        // Generic: use conditional
+        return (index + 1 < Capacity) ? index + 1 : 0;
     }
 }
 ```
 
-## 🎯 Overflow Handling
+## 🌊 Overflow Policies
 
-### **Overflow Policies**
+### **Overwrite Policy (Default)**
+- New elements always succeed
+- Oldest elements automatically overwritten when full
+- Best for streaming data, sensor readings, logging
 
 ```cpp
-enum class overflow_policy {
-    overwrite,  // Overwrite oldest elements when full (default)
-    discard     // Discard new elements when full
-};
+circular_buffer<int, 100> buffer;  // Defaults to overwrite policy
+auto result = buffer.push_back(42);  // Always succeeds (inserted or overwritten)
+```
 
+### **Discard Policy**
+- New elements discarded when buffer is full
+- Existing data preserved until explicitly removed
+- Best for priority queues, finite resources
+
+```cpp
+circular_buffer<Task, 50, overflow_policy::discard> task_queue;
+auto result = task_queue.push_back(task);  // May return discarded
+```
+
+### **Result Feedback**
+
+```cpp
 enum class insert_result {
-    inserted,     // Successfully inserted
-    overwritten,  // Inserted by overwriting oldest element
-    discarded     // Element was discarded (buffer full + discard policy)
+    inserted,     // Successfully added to buffer
+    overwritten,  // Added by overwriting oldest element  
+    discarded     // Rejected due to full buffer + discard policy
 };
 ```
 
-### **Policy Behavior Examples**
+### **Policy Implementation Details**
+
+The overflow policy is enforced at compile-time through template specialization:
 
 ```cpp
-// Overwrite policy: always succeeds, may overwrite old data
-circular_buffer<int, 3, uint32_t, alignof(int), 64, overflow_policy::overwrite> overwrite_buf;
-auto result = overwrite_buf.push_back(42);  // Returns inserted/overwritten
-
-// Discard policy: rejects new elements when full
-circular_buffer<int, 3, uint32_t, alignof(int), 64, overflow_policy::discard> discard_buf;
-auto result = discard_buf.push_back(42);    // Returns inserted/discarded
+template <insert_position Position, typename... Args> 
+insert_result insert_impl(Args&&... args)
+{
+    bool was_full = full();
+    if constexpr (Policy == overflow_policy::discard)
+    {
+        if (was_full)
+        {
+            return insert_result::discarded;
+        }
+    }
+    // ... insertion logic
+}
 ```
 
-## 📋 Public Interface
+## 🎨 Complete API Reference
 
-### **Type Definitions**
-
-```cpp
-using value_type = T;
-using size_type = IndexType;
-using index_type = IndexType;
-using reference = T&;
-using const_reference = const T&;
-using pointer = T*;
-using const_pointer = const T*;
-```
-
-### **Constructors**
+### **Capacity Management**
 
 ```cpp
-// Default construction (empty buffer)
-circular_buffer();
+// Compile-time information
+static constexpr size_type capacity() noexcept;        // Maximum elements
+static constexpr bool has_inline_storage() noexcept;   // True if embedded storage
 
-// Fill constructor
-explicit circular_buffer(const T& value);
-
-// Range constructor
-template<typename Iterator>
-circular_buffer(Iterator first, Iterator last);
-
-// Initializer list
-circular_buffer(std::initializer_list<T> init);
-
-// Copy/move constructors
-circular_buffer(const circular_buffer& other);
-circular_buffer(circular_buffer&& other) noexcept;
-
-// Copy/move assignment
-circular_buffer& operator=(const circular_buffer& other);
-circular_buffer& operator=(circular_buffer&& other) noexcept;
-```
-
-### **Capacity and Size**
-
-```cpp
-// Capacity queries
-static constexpr size_type capacity() noexcept { return Capacity; }
-size_type size() const noexcept;
-bool empty() const noexcept;
-bool full() const noexcept;
-
-// Clear all elements
-void clear() noexcept;
+// Runtime state  
+size_type size() const noexcept;                       // Current element count
+bool empty() const noexcept;                           // True if no elements
+bool full() const noexcept;                            // True if at capacity
+void clear() noexcept;                                 // Remove all elements
 ```
 
 ### **Element Access**
 
 ```cpp
-// Indexed access (unchecked)
+// Indexed access (unchecked - assert in debug builds)
 reference operator[](size_type index) noexcept;
 const_reference operator[](size_type index) const noexcept;
 
-// Indexed access (bounds checked)
+// Indexed access (bounds checked - throws std::out_of_range)
 reference at(size_type index);
 const_reference at(size_type index) const;
 
-// Front/back access (undefined if empty)
+// Front/back access (undefined if empty - assert in debug builds)
 reference front() noexcept;
 const_reference front() const noexcept;
 reference back() noexcept;
@@ -217,59 +255,29 @@ const_reference back() const noexcept;
 ### **Insert Operations with Result Feedback**
 
 ```cpp
-// Modern interface: returns what happened
+// Copy/move insertion
 insert_result push_back(const T& value);
 insert_result push_back(T&& value);
-template<typename... Args> 
-insert_result emplace_back(Args&&... args);
-
 insert_result push_front(const T& value);
 insert_result push_front(T&& value);
+
+// In-place construction
+template<typename... Args> 
+insert_result emplace_back(Args&&... args);
 template<typename... Args> 
 insert_result emplace_front(Args&&... args);
-
-// Traditional interface: ignores overflow result
-void push_back_unchecked(const T& value);
-void push_back_unchecked(T&& value);
-template<typename... Args> 
-void emplace_back_unchecked(Args&&... args);
-
-void push_front_unchecked(const T& value);
-void push_front_unchecked(T&& value);
-template<typename... Args> 
-void emplace_front_unchecked(Args&&... args);
 ```
 
 ### **Remove Operations**
 
 ```cpp
-// Traditional interface (undefined if empty)
-void pop_back();
-void pop_front();
+// Traditional interface (undefined if empty - assert in debug builds)
+void drop_back();
+void drop_front();
 
 // Safe interface with optional return
-std::optional<T> pop_back_safe();
-std::optional<T> pop_front_safe();
-
-// Convenience aliases for optional interface
-std::optional<T> pop() { return pop_back_safe(); }  // Default to back
-```
-
-### **Bulk Operations**
-
-```cpp
-// Bulk insert with statistics
-struct bulk_insert_result {
-    size_type inserted_count;
-    size_type overwritten_count;
-    size_type discarded_count;
-};
-
-template<typename Iterator>
-bulk_insert_result push_back_range(Iterator first, Iterator last);
-
-template<typename Iterator>
-bulk_insert_result push_front_range(Iterator first, Iterator last);
+std::optional<T> take_back();
+std::optional<T> take_front();
 ```
 
 ### **Iterator Support**
@@ -300,103 +308,50 @@ const_reverse_iterator rend() const noexcept;
 const_reverse_iterator crend() const noexcept;
 ```
 
-## 💾 Memory Layout
+## 🎪 Advanced Usage Examples
 
-### **Internal Data Members**
+### **Real-Time Sensor Data**
 
 ```cpp
-private:
-    storage_t m_storage;    // Embedded array or heap pointer
-    IndexType m_head;       // Write position (next insert location)
-    IndexType m_tail;       // Read position (next remove location)
-    IndexType m_size;       // Current number of elements
+// High-frequency sensor readings with overwrite policy
+circular_buffer<SensorReading, 1000> sensor_buffer;
+
+void on_sensor_data(const SensorReading& reading) {
+    auto result = sensor_buffer.push_back(reading);
+    // Always succeeds - old data automatically discarded
+}
+
+// Process recent data
+for (const auto& reading : sensor_buffer) {
+    analyze(reading);
+}
 ```
 
-### **Embedded vs Heap Storage Implementation**
+### **Fixed-Size Task Queue**
 
 ```cpp
-// Storage strategy selection
-static constexpr bool uses_embedded_storage = (Capacity <= EmbeddedThreshold);
+// Limited task queue with discard policy
+circular_buffer<Task, 100, overflow_policy::discard> task_queue;
 
-// Storage types
-using embedded_storage_t = alignas(Alignment) std::array<std::byte, sizeof(T) * Capacity>;
-using heap_storage_t = T*;
-using storage_t = std::conditional_t<uses_embedded_storage, embedded_storage_t, heap_storage_t>;
+bool schedule_task(const Task& task) {
+    auto result = task_queue.push_back(task);
+    return result != insert_result::discarded;
+}
+
+// Process tasks
+while (auto task = task_queue.take_front()) {
+    execute(*task);
+}
 ```
 
-## 🧪 Usage Examples
-
-### **Basic Usage**
+### **STL Algorithm Integration**
 
 ```cpp
-#include "circular_buffer/circular_buffer.h"
+circular_buffer<int, 1000> buffer;
 
-// Default configuration: 32-bit indices, natural alignment, overwrite policy
-dod::circular_buffer<int, 100> buffer;
-
-// Add elements
-auto result1 = buffer.push_back(42);           // Returns insert_result::inserted
-auto result2 = buffer.emplace_back(1, 2, 3);  // Construct in-place
-
-// Access elements
-int front = buffer.front();                   // Get first element
-int back = buffer.back();                     // Get last element
-int third = buffer[2];                        // Index access
-
-// Remove elements  
-buffer.pop_back();                            // Remove last (undefined if empty)
-auto popped = buffer.pop_back_safe();         // Returns std::optional<int>
-auto item = buffer.pop();                     // Alias for pop_back_safe()
-
-// Query state
-bool is_empty = buffer.empty();
-bool is_full = buffer.full();
-size_t count = buffer.size();
-```
-
-### **Memory-Optimized Usage**
-
-```cpp
-// Tiny buffer with 8-bit indices
-dod::circular_buffer<uint8_t, 200, uint8_t> tiny_buffer;
-
-// Cache-line aligned for SIMD operations
-dod::circular_buffer<float, 512, uint32_t, 64> aligned_buffer;
-
-// Force heap allocation for large embedded threshold
-dod::circular_buffer<MyStruct, 128, uint32_t, alignof(MyStruct), 32> heap_buffer;
-```
-
-### **Overflow Policy Usage**
-
-```cpp
-// Overwrite policy (default)
-dod::circular_buffer<int, 3, uint32_t, alignof(int), 64, 
-                     dod::overflow_policy::overwrite> overwrite_buf;
-
-overwrite_buf.push_back(1);  // inserted
-overwrite_buf.push_back(2);  // inserted  
-overwrite_buf.push_back(3);  // inserted
-auto result = overwrite_buf.push_back(4);  // overwritten (removes element 1)
-
-// Discard policy
-dod::circular_buffer<int, 3, uint32_t, alignof(int), 64,
-                     dod::overflow_policy::discard> discard_buf;
-
-discard_buf.push_back(1);    // inserted
-discard_buf.push_back(2);    // inserted
-discard_buf.push_back(3);    // inserted
-auto result = discard_buf.push_back(4);  // discarded (element 4 rejected)
-```
-
-### **Range-Based Operations**
-
-```cpp
-dod::circular_buffer<int, 1000> buffer;
-
-// Range-based for loop
-for (const auto& item : buffer) {
-    process(item);
+// Fill with test data
+for (int i = 0; i < 500; ++i) {
+    buffer.push_back(i);
 }
 
 // STL algorithms
@@ -404,10 +359,91 @@ std::fill(buffer.begin(), buffer.end(), 42);
 auto it = std::find(buffer.begin(), buffer.end(), 123);
 std::sort(buffer.begin(), buffer.end());
 
-// Bulk insertion
+// Individual insertion (optimized performance)
 std::vector<int> data = {1, 2, 3, 4, 5};
-auto bulk_result = buffer.push_back_range(data.begin(), data.end());
-std::cout << "Inserted: " << bulk_result.inserted_count << std::endl;
+for (const auto& item : data) {
+    buffer.push_back(item);
+}
+```
+
+### **SIMD-Optimized Buffer**
+
+```cpp
+// 64-byte aligned buffer for AVX-512 operations
+struct alignas(64) SimdData {
+    float values[16];
+};
+
+circular_buffer<SimdData, 256, overflow_policy::overwrite, uint32_t, 32, 64> simd_buffer;
+
+// Buffer automatically maintains 64-byte alignment for all elements
+```
+
+## 🔧 Customization and Extension
+
+### **Custom Allocators**
+
+```cpp
+// Example: Pool allocator integration
+#define CIRCULAR_BUFFER_ALLOC(size, alignment) my_pool_alloc(size, alignment)
+#define CIRCULAR_BUFFER_FREE(ptr) my_pool_free(ptr)
+#include "circular_buffer/circular_buffer.h"
+```
+
+### **Custom Assertions**
+
+```cpp
+// Example: Logging assertions
+#define CIRCULAR_BUFFER_ASSERT(expr) do { \
+    if (!(expr)) { \
+        log_error("Assertion failed: " #expr); \
+        std::abort(); \
+    } \
+} while(0)
+#include "circular_buffer/circular_buffer.h"
+```
+
+### **Alignment Helpers**
+
+The implementation includes a `safe_alignment_of` helper for macOS compatibility:
+
+```cpp
+template <typename T> 
+inline constexpr size_t safe_alignment_of = alignof(T) < alignof(void*) ? alignof(void*) : alignof(T);
+```
+
+This ensures alignment is at least `alignof(void*)` to meet macOS allocation requirements.
+
+## 🔬 Exception Safety
+
+### **Exception Safety Guarantees**
+
+| Operation | Guarantee | Notes |
+|-----------|-----------|-------|
+| Constructors | Strong | Rollback on exception |
+| Copy assignment | Strong | Rollback on exception |
+| Move operations | No-throw | Marked `noexcept` where possible |
+| Insert operations | Basic | Buffer remains valid |
+| Access operations | No-throw | May assert in debug builds |
+| Destructors | No-throw | Always `noexcept` |
+
+### **Exception-Safe Design Patterns**
+
+```cpp
+// Safe insertion with rollback
+template <insert_position Position, typename... Args> 
+insert_result insert_impl(Args&&... args)
+{
+    // Check state before modification
+    bool was_full = full();
+    
+    // Use placement new with exception safety
+    T* storage = get_storage();
+    dod::construct<T>(&storage[m_head], std::forward<Args>(args)...);
+    
+    // Update indices only after successful construction
+    // ...
+}
 ```
 
 ## 🔧 Build Integration
@@ -426,9 +462,19 @@ target_link_libraries(my_target PRIVATE circular_buffer)
 
 ### **Compiler Requirements**
 
-- **C++17 or later**
+- **C++17 or later** (for `std::optional`, `constexpr if`, `std::launder`)
 - **Supported compilers**: GCC 9+, Clang 10+, MSVC 2019+
 - **Platforms**: Windows, Linux, macOS
+
+### **Required C++17 Features**
+
+| Feature | Usage |
+|---------|-------|
+| `constexpr if` | Template specialization |
+| `std::optional` | Safe element removal |
+| `std::launder` | Placement new safety |
+| Structured bindings | Iterator implementation |
+| Template argument deduction | Constructor templates |
 
 ## 📈 Performance Characteristics
 
@@ -438,8 +484,10 @@ target_link_libraries(my_target PRIVATE circular_buffer)
 |-----------|------------|-------|
 | `push_back()` | O(1) | Always constant time |
 | `push_front()` | O(1) | Always constant time |
-| `pop_back()` | O(1) | Always constant time |
-| `pop_front()` | O(1) | Always constant time |
+| `drop_back()` | O(1) | Always constant time |
+| `drop_front()` | O(1) | Always constant time |
+| `take_back()` | O(1) | Always constant time |
+| `take_front()` | O(1) | Always constant time |
 | `operator[]` | O(1) | Index calculation only |
 | `front()` / `back()` | O(1) | Direct access |
 | `size()` / `empty()` | O(1) | Cached values |
@@ -450,6 +498,14 @@ target_link_libraries(my_target PRIVATE circular_buffer)
 |--------------|----------------|-------|
 | Embedded | 3 * sizeof(IndexType) | Plus alignment padding |
 | Heap | 3 * sizeof(IndexType) + sizeof(T*) | Plus heap allocation |
+
+### **Performance Optimizations**
+
+1. **Power-of-2 capacity**: Uses bit masking instead of modulo
+2. **Template unification**: Single implementation for all insert operations
+3. **Placement new**: Direct construction without temporary objects
+4. **Index caching**: Avoids repeated calculations
+5. **Branch prediction**: Optimized conditional logic
 
 ### **Performance Goals**
 
@@ -480,10 +536,25 @@ target_link_libraries(my_target PRIVATE circular_buffer)
 - Different applications have different overflow requirements
 - Template specialization enables policy-specific optimizations
 
-### **Why Optional Pop Methods?**
-- Safe alternative to undefined behavior on empty buffer
-- Modern C++ best practice (explicit error handling)
-- Maintains backward compatibility with traditional void pop methods
+### **Why Drop/Take Instead of Pop?**
+- Clear distinction between unsafe (`drop_*`) and safe (`take_*`) operations
+- Modern C++ best practice (explicit error handling via optional)
+- Avoids confusion with std::stack's `pop()` that returns void
+
+### **Why Remove Unchecked Operations?**
+- API simplification - fewer functions to learn and maintain
+- Performance difference was negligible in modern compilers
+- Regular operations are already highly optimized
+
+### **Why Remove Bulk Operations?**
+- API simplification - reduced complexity
+- Individual operations are equivalent in performance
+- Range-based loops provide equivalent functionality
+
+### **Why Platform-Specific Allocation?**
+- Windows `_mm_malloc` provides better alignment guarantees
+- POSIX `aligned_alloc` requires size to be multiple of alignment
+- Custom macros allow user override for specialized allocators
 
 ---
 
@@ -491,14 +562,14 @@ target_link_libraries(my_target PRIVATE circular_buffer)
 
 ```
 circular_buffer/
-├── circular_buffer.h              # Main implementation
+├── circular_buffer.h              # Main implementation (826 lines)
 └── CMakeLists.txt                 # Library configuration
 
 tests/
-├── circular_buffer_test.cpp       # Comprehensive unit tests
+├── circular_buffer_test.cpp       # Comprehensive unit tests (47+ tests)
 ├── performance_test.cpp           # Performance benchmarks  
-├── iterator_debug_test.cpp        # Iterator debugging tests
-└── test_common.h                  # Test utilities
+├── test_common.h                  # Test utilities and helper objects
+└── iterator_debug_test.cpp        # Iterator debugging tests
 
 .github/workflows/
 ├── windows.yml                    # Windows MSVC builds

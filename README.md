@@ -2,11 +2,11 @@
 
 A high-performance, header-only circular buffer implementation for C++17 that stores exactly N elements without the N-1 limitation found in many implementations.
 
-[![Windows](https://github.com/YourRepo/CircularBuffer/actions/workflows/windows.yml/badge.svg)](https://github.com/YourRepo/CircularBuffer/actions/workflows/windows.yml)
-[![Linux GCC](https://github.com/YourRepo/CircularBuffer/actions/workflows/linux-gcc.yml/badge.svg)](https://github.com/YourRepo/CircularBuffer/actions/workflows/linux-gcc.yml)
-[![Linux Clang](https://github.com/YourRepo/CircularBuffer/actions/workflows/linux-clang.yml/badge.svg)](https://github.com/YourRepo/CircularBuffer/actions/workflows/linux-clang.yml)
-[![macOS](https://github.com/YourRepo/CircularBuffer/actions/workflows/macos.yml/badge.svg)](https://github.com/YourRepo/CircularBuffer/actions/workflows/macos.yml)
-[![Code Coverage](https://codecov.io/github/YourRepo/CircularBuffer/branch/main/graph/badge.svg)](https://codecov.io/github/YourRepo/CircularBuffer)
+[![Windows](https://github.com/SergeyMakeev/CircularBuffer/actions/workflows/windows.yml/badge.svg)](https://github.com/SergeyMakeev/CircularBuffer/actions/workflows/windows.yml)
+[![Linux GCC](https://github.com/SergeyMakeev/CircularBuffer/actions/workflows/linux-gcc.yml/badge.svg)](https://github.com/SergeyMakeev/CircularBuffer/actions/workflows/linux-gcc.yml)
+[![Linux Clang](https://github.com/SergeyMakeev/CircularBuffer/actions/workflows/linux-clang.yml/badge.svg)](https://github.com/SergeyMakeev/CircularBuffer/actions/workflows/linux-clang.yml)
+[![macOS](https://github.com/SergeyMakeev/CircularBuffer/actions/workflows/macos.yml/badge.svg)](https://github.com/SergeyMakeev/CircularBuffer/actions/workflows/macos.yml)
+[![Code Coverage](https://codecov.io/github/SergeyMakeev/CircularBuffer/branch/main/graph/badge.svg)](https://codecov.io/github/SergeyMakeev/CircularBuffer)
 
 ## Quick Start
 
@@ -32,8 +32,9 @@ ctest                    # Run all tests
 - **Custom Index Types**: `uint8_t`, `uint16_t`, `uint32_t`, `uint64_t` support
 - **Overflow Policies**: Configurable overwrite or discard behavior
 - **Custom Alignment**: SIMD-friendly memory alignment support
+- **Customizable**: Override allocators and assertions via macros
 - **Cross-Platform**: Tested on Windows (MSVC), Linux (GCC/Clang), and macOS
-- **Comprehensive Tests**: 50+ unit tests covering all functionality
+- **Comprehensive Tests**: 47+ unit tests covering all functionality
 - **C++17 Compatible**: Modern C++ features with broad compiler support
 
 ## Basic Usage
@@ -42,29 +43,32 @@ ctest                    # Run all tests
 #include "circular_buffer/circular_buffer.h"
 
 int main() {
-    // Create a circular buffer with capacity for 100 integers
+    // Step 1: Create a circular buffer that can hold 100 integers
     dod::circular_buffer<int, 100> buffer;
     
-    // Add elements
+    // Step 2: Add elements to the buffer
     auto result1 = buffer.push_back(42);           // Returns insert_result::inserted
-    auto result2 = buffer.emplace_back(1, 2, 3);  // Construct in-place
+    auto result2 = buffer.emplace_back(1, 2, 3);  // Create element directly in buffer
     
-    // Access elements
+    // Step 3: Access elements
     int front = buffer.front();                   // Get first element
     int back = buffer.back();                     // Get last element
-    int third = buffer[2];                        // Index access (O(1))
+    int third = buffer[2];                        // Access by index (O(1) time)
     
-    // Remove elements safely
-    auto popped = buffer.pop_back_safe();         // Returns std::optional<int>
-    auto item = buffer.pop();                     // Alias for pop_back_safe()
+    // Step 4: Remove elements safely (returns std::optional)
+    auto popped = buffer.take_back();             // Returns std::optional<int>
+    auto item = buffer.take_front();              // Returns std::optional<int>
     
-    // Traditional unsafe removal (undefined if empty)
-    buffer.pop_back();                            // Faster but check empty() first
+    // Step 5: Remove elements quickly (undefined behavior if empty)
+    if (!buffer.empty()) {
+        buffer.drop_back();                       // Faster but check empty() first
+        buffer.drop_front();                      // Faster but check empty() first
+    }
     
-    // Query state
-    bool is_empty = buffer.empty();
-    bool is_full = buffer.full();
-    size_t count = buffer.size();
+    // Step 6: Check buffer state
+    bool is_empty = buffer.empty();               // True if no elements
+    bool is_full = buffer.full();                 // True if at capacity
+    size_t count = buffer.size();                 // Current number of elements
     
     return 0;
 }
@@ -76,45 +80,43 @@ int main() {
 
 ```cpp
 template<typename T,                                           // Element type
-         size_t Capacity,                                      // Fixed buffer size
+         size_t Capacity,                                      // Fixed buffer size  
+         overflow_policy Policy = overflow_policy::overwrite,  // Overflow behavior
          typename IndexType = uint32_t,                        // Index type
-         size_t Alignment = alignof(T),                        // Memory alignment
-         size_t EmbeddedThreshold = 64,                        // Embedded vs heap cutoff
-         overflow_policy Policy = overflow_policy::overwrite>  // Overflow behavior
+         size_t InlineThreshold = 64,                          // Embedded vs heap cutoff
+         size_t Alignment = alignof(T)>                        // Memory alignment
 class circular_buffer;
 ```
 
 ### Memory-Optimized Usage
 
 ```cpp
-// Tiny buffer with 8-bit indices (saves memory)
-dod::circular_buffer<uint8_t, 200, uint8_t> tiny_buffer;
+// Small buffer with 8-bit indices (saves memory)
+dod::circular_buffer<uint8_t, 200, dod::overflow_policy::overwrite, uint8_t> tiny_buffer;
 
-// Cache-line aligned for SIMD operations
-dod::circular_buffer<float, 512, uint32_t, 64> aligned_buffer;
+// Cache-line aligned for SIMD operations (64-byte alignment)
+dod::circular_buffer<float, 512, dod::overflow_policy::overwrite, uint32_t, 64, 64> aligned_buffer;
 
-// Force heap allocation for large embedded threshold
-dod::circular_buffer<MyStruct, 128, uint32_t, alignof(MyStruct), 32> heap_buffer;
+// Force heap allocation (set threshold lower than capacity)
+dod::circular_buffer<MyStruct, 128, dod::overflow_policy::overwrite, uint32_t, 32> heap_buffer;
 ```
 
 ### Overflow Policy Usage
 
 ```cpp
 // Overwrite policy (default): always succeeds, may overwrite old data
-dod::circular_buffer<int, 100, uint32_t, alignof(int), 64, 
-                     dod::overflow_policy::overwrite> overwrite_buf;
+dod::circular_buffer<int, 100, dod::overflow_policy::overwrite> overwrite_buf;
 
 auto result1 = overwrite_buf.push_back(42);  // Returns inserted/overwritten
 
 // Discard policy: rejects new elements when full
-dod::circular_buffer<int, 100, uint32_t, alignof(int), 64,
-                     dod::overflow_policy::discard> discard_buf;
+dod::circular_buffer<int, 100, dod::overflow_policy::discard> discard_buf;
 
 auto result2 = discard_buf.push_back(42);    // Returns inserted/discarded
 
 // Check what happened
 switch (result2) {
-    case dod::insert_result::inserted:    /* Success */ break;
+    case dod::insert_result::inserted:    /* Success - element added */ break;
     case dod::insert_result::overwritten: /* Overwrote old data */ break;
     case dod::insert_result::discarded:   /* Buffer full, rejected */ break;
 }
@@ -130,15 +132,16 @@ for (const auto& item : buffer) {
     process(item);
 }
 
-// STL algorithms
+// STL algorithms work with iterators
 std::fill(buffer.begin(), buffer.end(), 42);
 auto it = std::find(buffer.begin(), buffer.end(), 123);
 std::sort(buffer.begin(), buffer.end());
 
-// Bulk insertion
+// Add multiple elements (no bulk operations for performance reasons)
 std::vector<int> data = {1, 2, 3, 4, 5};
-auto bulk_result = buffer.push_back_range(data.begin(), data.end());
-std::cout << "Inserted: " << bulk_result.inserted_count << std::endl;
+for (const auto& item : data) {
+    buffer.push_back(item);
+}
 ```
 
 ## Performance Characteristics
@@ -148,7 +151,8 @@ std::cout << "Inserted: " << bulk_result.inserted_count << std::endl;
 | Operation | Complexity | Notes |
 |-----------|------------|-------|
 | `push_back()` / `push_front()` | O(1) | Always constant time |
-| `pop_back()` / `pop_front()` | O(1) | Always constant time |
+| `drop_back()` / `drop_front()` | O(1) | Always constant time |
+| `take_back()` / `take_front()` | O(1) | Always constant time |
 | `operator[]` / `at()` | O(1) | Direct index calculation |
 | `front()` / `back()` | O(1) | Direct access |
 | `begin()` / `end()` | O(1) | Iterator creation |
@@ -169,7 +173,7 @@ Based on benchmarks with 10,000 elements:
 |-----------|----------------|------------|---------|
 | `push_back()` | ~15 ns | ~45 ns | **3.0x faster** |
 | `push_front()` | ~15 ns | ~45 ns | **3.0x faster** |
-| `pop_back()` | ~8 ns | ~25 ns | **3.1x faster** |
+| `drop_back()` | ~8 ns | ~25 ns | **3.1x faster** |
 | Random access | ~2 ns | ~3 ns | **1.5x faster** |
 | Memory usage | 40KB | 65KB | **38% less** |
 
@@ -179,9 +183,10 @@ Based on benchmarks with 10,000 elements:
 
 ```cpp
 circular_buffer();                                    // Default (empty)
-explicit circular_buffer(const T& value);            // Fill with value
 circular_buffer(Iterator first, Iterator last);      // Range constructor
 circular_buffer(std::initializer_list<T> init);      // Initializer list
+circular_buffer(const circular_buffer& other);       // Copy constructor
+circular_buffer(circular_buffer&& other);            // Move constructor
 ```
 
 ### Capacity
@@ -191,6 +196,7 @@ static constexpr size_type capacity();               // Maximum elements
 size_type size() const;                              // Current elements
 bool empty() const;                                  // True if no elements
 bool full() const;                                   // True if at capacity
+static constexpr bool has_inline_storage();          // True if uses embedded storage
 void clear();                                        // Remove all elements
 ```
 
@@ -198,9 +204,9 @@ void clear();                                        // Remove all elements
 
 ```cpp
 reference operator[](size_type index);              // Unchecked access
-reference at(size_type index);                      // Bounds-checked access
-reference front();                                  // First element
-reference back();                                   // Last element
+reference at(size_type index);                      // Bounds-checked access (throws)
+reference front();                                  // First element (undefined if empty)
+reference back();                                   // Last element (undefined if empty)
 ```
 
 ### Modifiers
@@ -214,18 +220,11 @@ insert_result push_front(const T& value);
 insert_result push_front(T&& value);
 insert_result emplace_front(Args&&... args);
 
-// Insert operations (ignore overflow result - faster)
-void push_back_unchecked(const T& value);
-void push_front_unchecked(const T& value);
-void emplace_back_unchecked(Args&&... args);
-void emplace_front_unchecked(Args&&... args);
-
 // Remove operations
-void pop_back();                                     // Undefined if empty
-void pop_front();                                    // Undefined if empty
-std::optional<T> pop_back_safe();                   // Returns nullopt if empty
-std::optional<T> pop_front_safe();                  // Returns nullopt if empty
-std::optional<T> pop();                             // Alias for pop_back_safe()
+void drop_back();                                    // Undefined if empty
+void drop_front();                                   // Undefined if empty
+std::optional<T> take_back();                        // Returns nullopt if empty
+std::optional<T> take_front();                       // Returns nullopt if empty
 ```
 
 ### Iterators
@@ -237,38 +236,67 @@ const_iterator cbegin() / cend() const;             // Explicit const iterators
 reverse_iterator rbegin() / rend();                 // Reverse iterators
 ```
 
+## Customization Options
+
+### Custom Memory Allocators
+
+You can override the default memory allocation by defining macros before including the header:
+
+```cpp
+// Example: Use custom allocator
+#define CIRCULAR_BUFFER_ALLOC(size, alignment) my_aligned_alloc(size, alignment)
+#define CIRCULAR_BUFFER_FREE(ptr) my_aligned_free(ptr)
+#include "circular_buffer/circular_buffer.h"
+```
+
+**Default allocators:**
+- **Windows**: Uses `_mm_malloc()` and `_mm_free()`
+- **POSIX**: Uses `aligned_alloc()` and `free()`
+
+### Custom Assertions
+
+Override debug assertions for your project:
+
+```cpp
+// Example: Use custom assert
+#define CIRCULAR_BUFFER_ASSERT(expr) MY_ASSERT(expr)
+#include "circular_buffer/circular_buffer.h"
+```
+
+**Default**: Uses standard `assert()` macro
+
 ## Building and Testing
 
 ### Requirements
 
-- **C++17 or later**
-- **CMake 3.14+**
+- **C++17 or later** (required for `std::optional`, `constexpr if`, etc.)
+- **CMake 3.14+** (for building tests)
 - **Supported compilers**: GCC 9+, Clang 10+, MSVC 2019+
 
 ### Build Instructions
 
 ```bash
-# Clone the repository
-git clone https://github.com/YourRepo/CircularBuffer.git
+# Step 1: Clone the repository
+git clone https://github.com/SergeyMakeev/CircularBuffer.git
 cd CircularBuffer
 
-# Create build directory
+# Step 2: Create build directory
 mkdir build && cd build
 
-# Configure with CMake
+# Step 3: Configure with CMake
 cmake ..
 
-# Build everything
+# Step 4: Build everything
 cmake --build . --config Release
 
-# Run tests
+# Step 5: Run tests
 ctest
 
-# Run tests directly
+# Step 6: Run tests directly (optional)
 ./circular_buffer_tests        # Linux/macOS
 .\Release\circular_buffer_tests.exe  # Windows
 
-# Run performance benchmarks
+# Step 7: Run performance benchmarks (optional)
 ./performance_test              # Linux/macOS
 .\Release\performance_test.exe  # Windows
 ```
@@ -288,24 +316,34 @@ target_compile_features(my_target PRIVATE cxx_std_17)
 ### Advanced Build Options
 
 ```bash
-# Enable sanitizers
+# Enable sanitizers (for debugging)
 cmake .. -DENABLE_ASAN=ON      # Address sanitizer
 cmake .. -DENABLE_TSAN=ON      # Thread sanitizer
 cmake .. -DENABLE_MSAN=ON      # Memory sanitizer
 
-# Enable code coverage
+# Enable code coverage (for testing)
 cmake .. -DENABLE_COVERAGE=ON
 
 # Build types
-cmake .. -DCMAKE_BUILD_TYPE=Debug    # Debug build
-cmake .. -DCMAKE_BUILD_TYPE=Release  # Optimized build
+cmake .. -DCMAKE_BUILD_TYPE=Debug    # Debug build (slower, more checks)
+cmake .. -DCMAKE_BUILD_TYPE=Release  # Optimized build (faster)
 ```
+
+## Exception Safety
+
+The circular buffer provides the following exception safety guarantees:
+
+- **Basic guarantee**: If an exception occurs during insertion, the buffer remains in a valid state
+- **Strong guarantee**: Copy constructor and copy assignment provide rollback on exception
+- **No-throw guarantee**: Move operations, destructors, and query operations never throw
+
+**Note**: Exception safety depends on the element type `T` being exception-safe.
 
 ## Design Philosophy
 
 This implementation prioritizes:
 
-1. **Performance**: Maximum speed through optimized algorithms and data structures
+1. **Performance**: Maximum speed through optimized algorithms and unified implementations
 2. **Memory Efficiency**: Minimal overhead with smart storage strategies
 3. **Type Safety**: Compile-time checks and runtime assertions for debug builds
 4. **Usability**: Clean, STL-compatible API that's easy to understand and use
@@ -314,7 +352,8 @@ This implementation prioritizes:
 ### Key Design Decisions
 
 - **Separate head/tail/size tracking** eliminates the N-1 limitation
-- **Template-unified iterators** reduce code duplication while maintaining performance
+- **Template-unified insertion** reduces code duplication while maintaining performance
+- **Enum-based positioning** provides readable and zero-cost abstractions
 - **Power-of-2 optimization** uses bit masking for faster index calculations
 - **Embedded/heap storage strategy** balances stack usage with allocation overhead
 - **Configurable index types** optimize memory usage for different capacity ranges
@@ -355,13 +394,19 @@ A: std::deque is great for general use, but circular_buffer is 2-5x faster for p
 A: No, this is a fixed-capacity container. The capacity is determined at compile-time for maximum performance.
 
 **Q: Is it thread-safe?**  
-A: The current implementation is not thread-safe. For multi-threaded use, you'll need external synchronization.
+A: The current implementation is not thread-safe. For multi-threaded use, you'll need external synchronization (mutexes, atomic operations, etc.).
 
-**Q: What's the difference between push_back() and push_back_unchecked()?**  
-A: push_back() returns information about what happened (inserted/overwritten/discarded), while push_back_unchecked() is slightly faster but doesn't provide feedback.
+**Q: What happened to the unchecked insert functions?**  
+A: They were removed for API simplicity. The regular insert functions are already highly optimized and the performance difference was negligible.
 
 **Q: How do I handle buffer overflow?**  
 A: Use the overflow_policy template parameter: `overwrite` (default) overwrites old data, `discard` rejects new data when full.
 
 **Q: Can I store move-only types?**  
 A: Yes! The implementation fully supports move-only types through perfect forwarding and move semantics.
+
+**Q: Why were bulk operations removed?**  
+A: They were removed to simplify the API. For bulk insertion, simply loop with individual `push_back()` calls - the performance is equivalent.
+
+**Q: Can I use custom allocators?**  
+A: Yes! Define `CIRCULAR_BUFFER_ALLOC` and `CIRCULAR_BUFFER_FREE` macros before including the header.
